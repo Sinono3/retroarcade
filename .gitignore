@@ -1,0 +1,6 @@
+/target
+/cores
+/roms
+/saves
+users.json
+*.sqlite
