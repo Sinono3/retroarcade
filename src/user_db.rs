@@ -24,8 +24,7 @@ pub struct User {
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub struct SaveState {
     pub path: PathBuf,
-    pub console: String,
-    pub game: String,
+    pub game: i64,
     pub date: chrono::DateTime<Utc>,
 }
 
@@ -41,9 +40,9 @@ impl UserDb {
             let save = if let Ok(save) = save { save } else { continue };
             let save_path = save.path();
             let save_name = save_path.file_stem().unwrap().to_str().unwrap().to_owned();
-            let parts: Vec<&str> = save_name.splitn(4, "_").collect();
+            let parts: Vec<&str> = save_name.splitn(3, "_").collect();
 
-            if let [username, console, game, date_time] = parts[0..4] {
+            if let [username, game, date_time] = parts[0..3] {
                 let username_exists = users
                     .iter()
                     .filter(|u| u.username == username)
@@ -68,8 +67,7 @@ impl UserDb {
 
                 save_vec.push(SaveState {
                     path: save_path,
-                    console: console.to_string(),
-                    game: game.to_string(),
+                    game: game.parse()?,
                     date,
                 });
             } else {
@@ -90,16 +88,14 @@ impl UserDb {
         &mut self,
         data: &[u8],
         username: &str,
-        console: &str,
-        game: &str,
+        game: i64,
         date: DateTime<Utc>,
     ) -> Result<()> {
         let mut path = self.saves_path.clone();
 
         path.push(format!(
-            "{}_{}_{}_{}_{}.sav",
+            "{}_{}_{}_{}.sav",
             username,
-            console,
             game,
             date.format("%Y%m%d"),
             date.format("%H%M%S")
@@ -112,10 +108,10 @@ impl UserDb {
         // Once written, store save metadata in memory
         let save_state = SaveState {
             path,
-            console: console.to_string(),
-            game: game.to_string(),
+            game,
             date,
         };
+
         self.saves
             .entry(username.to_string())
             .or_insert_with(|| Vec::new())

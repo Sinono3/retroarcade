@@ -4,3 +4,4 @@
 /saves
 users.json
 *.sqlite
+image_cache

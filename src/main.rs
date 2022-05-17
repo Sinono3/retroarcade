@@ -1,12 +1,13 @@
 mod audio;
+mod cache;
 mod dialog;
 mod emulator;
 mod game_db;
+mod hash;
 mod menu;
 mod user_db;
-mod scraper;
-mod hash;
 
+use cache::Cache;
 use chrono::Utc;
 use dialog::{Dialog, DialogUpdate};
 use emulator::*;
@@ -16,11 +17,82 @@ use user_db::*;
 
 use macroquad::prelude::*;
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     path::{Path, PathBuf},
 };
 
-use crate::{dialog::DynamicDialog, scraper::IgdbClient};
+use crate::dialog::DynamicDialog;
+
+#[tokio::main]
+async fn main() {
+    pretty_env_logger::init();
+    let game_db = GameDb::load().await.unwrap();
+
+    macroquad::Window::new("RetroArcade", async {
+        let result = macroquad_main(game_db).await;
+        result.unwrap();
+    });
+}
+
+async fn macroquad_main(game_db: GameDb) -> anyhow::Result<()> {
+    let mut app = App {
+        state: AppState::Menu,
+        menu: MenuState {
+            game_db,
+            user_db: UserDb::load(Path::new("users.json"), Path::new("saves/"))?,
+            textures: HashMap::new(),
+            cache: Cache::new(Path::new("image_cache"))?,
+
+            selected_game: 0,
+            max_horizontal_games: 4,
+            current_user: "sinono3".to_string(),
+        },
+        emulator: None,
+
+        dialog_queue: VecDeque::new(),
+        current_dialog: None,
+    };
+
+    loop {
+        let event = app.update();
+
+        match event {
+            AppEvent::Continue => (),
+            AppEvent::GoToMenu => {
+                if let Some(emulator) = app.emulator {
+                    let save_buffer = emulator.snapshot();
+                    let username = &app.menu.current_user;
+                    let game = app
+                        .menu
+                        .game_db
+                        .games
+                        .values()
+                        .nth(app.menu.selected_game)
+                        .unwrap()
+                        .id;
+
+                    app.menu
+                        .user_db
+                        .save(&save_buffer, username, game, Utc::now())?;
+                }
+
+                app.state = AppState::Menu;
+                app.emulator = None;
+            }
+            AppEvent::StartEmulator { core, rom, save } => {
+                app.state = AppState::Emulator;
+                app.emulator = Some(EmulatorState::create(&core, &rom, save));
+            }
+            AppEvent::SpawnDialog(dialog) => {
+                app.dialog_queue.push_back(dialog);
+            }
+        }
+
+        app.render();
+
+        next_frame().await;
+    }
+}
 
 pub struct App {
     pub state: AppState,
@@ -85,7 +157,7 @@ impl App {
         }
     }
 
-    pub fn render(&self) {
+    pub fn render(&mut self) {
         match self.state {
             AppState::Menu => self.menu.render(),
             AppState::Emulator => {
@@ -101,89 +173,5 @@ impl App {
                 DynamicDialog::YesOrNo(dialog) => dialog.render(),
             }
         }
-    }
-}
-
-#[macroquad::main("RetroArcade")]
-async fn main() -> anyhow::Result<()> {
-    let client = IgdbClient {
-        client: reqwest::blocking::Client::new(),
-        client_id: "jsp7ndnseelw2z842equ59toi16zlm".to_string(),
-        access_token: "rg7hska3o0qwk47eh8k5oslwgxyc6e".to_string(),
-    };
-
-    //scraper::search_game_artwork(&client, "Super Mario Bros")?;
-    //let games = client.request_game_search("Super Mario Bros")?;
-    //dbg!(games);
-
-    let mut app = App {
-        state: AppState::Menu,
-        menu: MenuState {
-            game_db: GameDb::load().await?,
-            selected_console: 0,
-            selected_game: 0,
-            max_horizontal_games: 4,
-
-            user_db: UserDb::load(Path::new("users.json"), Path::new("saves/"))?,
-            current_user: "sinono3".to_string(),
-        },
-        emulator: None,
-
-        dialog_queue: VecDeque::new(),
-        current_dialog: None,
-    };
-
-    // Start the menu with NES selected
-    let starting_console = "nes";
-    app.menu.selected_console = app
-        .menu
-        .game_db
-        .consoles()
-        .iter()
-        .enumerate()
-        .find_map(|(i, c)| {
-            if *c == starting_console {
-                Some(i)
-            } else {
-                None
-            }
-        })
-        .unwrap_or(0);
-
-    loop {
-        let event = app.update();
-
-        match event {
-            AppEvent::Continue => (),
-            AppEvent::GoToMenu => {
-                if let Some(emulator) = app.emulator {
-                    let save_buffer = emulator.snapshot();
-                    let username = &app.menu.current_user;
-                    let console = app.menu.console_name(app.menu.selected_console).to_string();
-                    let game = app
-                        .menu
-                        .game_name(app.menu.selected_console, app.menu.selected_game)
-                        .to_string();
-
-                    app.menu
-                        .user_db
-                        .save(&save_buffer, username, &console, &game, Utc::now())?;
-                }
-
-                app.state = AppState::Menu;
-                app.emulator = None;
-            }
-            AppEvent::StartEmulator { core, rom, save } => {
-                app.state = AppState::Emulator;
-                app.emulator = Some(EmulatorState::create(&core, &rom, save));
-            }
-            AppEvent::SpawnDialog(dialog) => {
-                app.dialog_queue.push_back(dialog);
-            }
-        }
-
-        app.render();
-
-        next_frame().await;
     }
 }

@@ -1,108 +1,242 @@
+use crate::hash::{bytes_to_hex, DefaultHasher, N64Hasher, NesHasher, RomHasher, SnesHasher};
 use anyhow::{Context, Result};
+use log::error;
 use macroquad::{
     prelude::{Color, Image},
     rand,
 };
 use sha1::{Digest, Sha1};
+use sqlx::SqliteConnection;
 use std::{
     collections::HashMap,
-    ffi::{OsStr, OsString},
+    ffi::OsStr,
     fs::{self, File},
     path::PathBuf,
 };
-use crate::hash::{SnesHasher, DefaultHasher, RomHasher};
 
 const CORE_DIR: &str = "cores/";
 const ROMS_DIR: &str = "roms/";
 
 pub struct Game {
-    pub title: String,
-    pub filename: OsString,
-    pub color: Color,
+    pub id: i64,
+    pub rom_path: PathBuf,
     pub sha1: [u8; 20],
-    pub image: Option<Image>,
+    pub console_id: i64,
+    pub metadata: GameMetadata,
+}
+
+pub struct GameMetadata {
+    pub title: String,
+    pub cover_url: String,
+    pub color: Color,
+}
+
+pub struct Console {
+    pub id: i64,
+    pub core_path: PathBuf,
+    pub name: String,
 }
 
 pub struct GameDb {
-    /// console -> list of games
-    pub games: HashMap<String, Vec<Game>>,
-    consoles: Vec<String>,
+    pub games: HashMap<i64, Game>,
+    pub consoles: HashMap<i64, Console>,
+}
+
+#[derive(Clone, PartialEq, Eq, sqlx::FromRow)]
+#[sqlx(rename_all = "camelCase")]
+struct OpenVgdbRom {
+    rom_id: i64,
+    rom_file_name: String,
+    rom_extensionless_file_name: String,
+    system_id: i64,
+}
+
+#[derive(Clone, PartialEq, Eq, sqlx::FromRow)]
+#[sqlx(rename_all = "camelCase")]
+struct OpenVgdbRelease {
+    release_title_name: String,
+    release_cover_front: String,
+    release_date: String,
+    release_reference_url: String,
+    release_reference_image_url: String,
+}
+
+#[derive(Clone, PartialEq, Eq, sqlx::FromRow)]
+#[sqlx(rename_all = "camelCase")]
+struct OpenVgdbSystem {
+    system_name: String,
+    system_short_name: String,
 }
 
 impl GameDb {
     pub async fn load() -> Result<Self> {
         let mut games = HashMap::new();
+        let mut consoles = HashMap::new();
+
         let cores_dir = fs::read_dir(CORE_DIR)
             .context("reading core dir")?
             .filter_map(|core| core.ok())
             .filter(|core| core.file_type().map_or(false, |t| t.is_file()))
             .filter_map(|core| {
                 let path = core.path();
-                path.file_stem().map(|stem: &OsStr| stem.to_owned())
+                path.file_stem()
+                    .map(|stem: &OsStr| stem.to_owned())
+                    .map(move |name| (path, name))
             });
 
+        // TODO: download openvgdb
         let openvgdb = sqlx::SqlitePool::connect("openvgdb.sqlite").await?;
-        openvgdb.acquire();
+        let mut conn = openvgdb.acquire().await?;
 
-        for core in cores_dir {
+        for (core_path, core_name) in cores_dir {
             let mut roms_path = PathBuf::from(ROMS_DIR);
-            roms_path.push(&core);
+            roms_path.push(&core_name);
 
-            let roms =
-                fs::read_dir(roms_path)
-                    .context("reading roms path")
-                    .map_or(vec![], |roms| {
-                        roms.filter_map(|rom| rom.ok())
-                            .filter(|rom| rom.file_type().map_or(false, |t| t.is_file()))
-                            .filter_map(|rom| {
-                                let path = rom.path();
-                                let name = path.file_name()?.to_owned();
-                                Some((path, name))
-                            })
-                            .filter_map(|(path, name)| {
-                                let mut file = File::open(&path).ok()?;
-                                let mut hasher = Sha1::new();
+            let roms_iter = fs::read_dir(roms_path)
+                .context("reading roms path")?
+                .filter_map(|rom| rom.ok())
+                .filter(|rom| rom.file_type().map_or(false, |t| t.is_file()))
+                .filter_map(|rom| {
+                    let path = rom.path();
+                    let name = path.file_name()?.to_owned();
+                    Some((path, name))
+                });
 
-                                match path.extension().and_then(|e| e.to_str()) {
-                                    Some("sfc") => SnesHasher::hash(&mut file, &mut hasher).ok()?,
-                                    _ => DefaultHasher::hash(&mut file, &mut hasher).ok()?,
-                                }
+            for (rom_path, name) in roms_iter {
+                let mut file = File::open(&rom_path)?;
+                let mut hasher = Sha1::new();
 
-                                let sha1: [u8; 20] = hasher.finalize().into();
+                let hash_result = match rom_path.extension().and_then(|e| e.to_str()) {
+                    Some("sfc") => SnesHasher::hash(&mut file, &mut hasher),
+                    Some("nes") => NesHasher::hash(&mut file, &mut hasher),
+                    Some("z64") => N64Hasher::hash(&mut file, &mut hasher),
+                    _ => DefaultHasher::hash(&mut file, &mut hasher),
+                };
 
-                                print!("{}: ", name.to_str().unwrap());
+                if hash_result.is_err() {
+                    error!("ROM Unsupported '{}'", name.to_str().unwrap());
+                    continue;
+                }
 
-                                for byte in sha1.iter() {
-                                    print!("{:02X}", byte);
-                                }
+                let sha1: [u8; 20] = hasher.finalize().into();
+                let sha1_hex = bytes_to_hex(&sha1);
 
-                                println!();
+                let openvgdb_rom = if let Ok(rom) = get_rom_with_sha1(&mut conn, &sha1_hex).await {
+                    log::info!("ROM Found '{}': {}", name.to_str().unwrap(), sha1_hex);
+                    rom
+                } else {
+                    log::error!("ROM Failed '{}': {}", name.to_str().unwrap(), sha1_hex);
+                    continue;
+                };
 
-                                Some(Game {
-                                    title: name.to_string_lossy().to_string(),
-                                    filename: name.to_os_string(),
-                                    color: Color::from_rgba(
-                                        rand::gen_range(0u8, 255u8),
-                                        rand::gen_range(0u8, 255u8),
-                                        rand::gen_range(0u8, 255u8),
-                                        255,
-                                    ),
-                                    sha1,
-                                    image: None,
-                                })
-                            })
-                            .collect()
-                    });
+                let openvgdb_release = if let Ok(release) =
+                    get_release_with_rom_id(&mut conn, openvgdb_rom.rom_id).await
+                {
+                    release
+                } else {
+                    continue;
+                };
 
-            games.insert(core.to_string_lossy().to_string(), roms);
+                games.insert(
+                    openvgdb_rom.rom_id,
+                    Game {
+                        id: openvgdb_rom.rom_id,
+                        console_id: openvgdb_rom.system_id,
+                        rom_path,
+                        sha1,
+
+                        metadata: GameMetadata {
+                            title: openvgdb_release.release_title_name,
+                            cover_url: openvgdb_release.release_cover_front,
+                            color: Color::from_rgba(
+                                rand::gen_range(0u8, 255u8),
+                                rand::gen_range(0u8, 255u8),
+                                rand::gen_range(0u8, 255u8),
+                                255,
+                            ),
+                        },
+                    },
+                );
+
+                // Insert console if not yet in DB
+                if !consoles.contains_key(&openvgdb_rom.system_id) {
+                    let openvgdb_system =
+                        get_system_with_id(&mut conn, openvgdb_rom.system_id).await?;
+                    consoles.insert(
+                        openvgdb_rom.system_id,
+                        Console {
+                            id: openvgdb_rom.system_id,
+                            core_path: core_path.clone(),
+                            name: openvgdb_system.system_short_name,
+                        },
+                    );
+                }
+            }
         }
-
-        let consoles = games.keys().cloned().collect();
 
         Ok(GameDb { games, consoles })
     }
+}
 
-    pub fn consoles(&self) -> &[String] {
-        &self.consoles
-    }
+async fn get_rom_with_sha1(
+    conn: &mut SqliteConnection,
+    sha1_hex: &str,
+) -> Result<OpenVgdbRom, sqlx::Error> {
+    sqlx::query_as!(
+        OpenVgdbRom,
+        r#"
+                    SELECT 
+                        romID as "rom_id!: _", 
+                        romFileName as "rom_file_name!: _", 
+                        romExtensionlessFileName as "rom_extensionless_file_name!: _" ,
+                        systemID as "system_id!: _"
+                    FROM ROMs 
+                    WHERE romHashSHA1 = $1
+                    "#,
+        sha1_hex,
+    )
+    .fetch_one(conn)
+    .await
+}
+
+async fn get_release_with_rom_id(
+    conn: &mut SqliteConnection,
+    rom_id: i64,
+) -> Result<OpenVgdbRelease, sqlx::Error> {
+    sqlx::query_as!(
+        OpenVgdbRelease,
+        r#"
+        SELECT 
+            releaseTitleName as "release_title_name!: _",
+            releaseCoverFront as "release_cover_front!: _",
+            releaseDate as "release_date!: _",
+            releaseReferenceURL as "release_reference_url!: _",
+            releaseReferenceImageURL as "release_reference_image_url!: _"
+        FROM RELEASES 
+        WHERE romID = $1
+        ORDER BY releaseDate
+        "#,
+        rom_id,
+    )
+    .fetch_one(conn)
+    .await
+}
+
+async fn get_system_with_id(
+    conn: &mut SqliteConnection,
+    id: i64,
+) -> Result<OpenVgdbSystem, sqlx::Error> {
+    sqlx::query_as!(
+        OpenVgdbSystem,
+        r#"
+        SELECT 
+            systemName as "system_name!: _", 
+            systemShortName as "system_short_name!: _"
+        FROM SYSTEMS 
+        WHERE systemID = $1
+        "#,
+        id,
+    )
+    .fetch_one(conn)
+    .await
 }

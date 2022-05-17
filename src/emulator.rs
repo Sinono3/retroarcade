@@ -189,8 +189,8 @@ impl EmulatorState {
         if fb_width != self.fb_image.width as usize || fb_height != self.fb_image.height as usize {
             self.resize_framebuffer(fb_width, fb_height, fb_pitch);
 
-            println!(
-                "{:?} (width {}) (height {}) (pitch {} == {})",
+            info!(
+                "Display mode changed: {:?} (width {}) (height {}) (pitch {} == {})",
                 self.emu.pixel_format(),
                 fb_width,
                 fb_height,
