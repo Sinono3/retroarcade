@@ -12,8 +12,8 @@ use macroquad::prelude::*;
 pub struct MenuState {
     pub game_db: GameDb,
     pub user_db: UserDb,
-    pub textures: HashMap<i64, Texture2D>,
     pub cache: Cache,
+    pub textures: HashMap<i64, Texture2D>,
 
     pub selected_game: usize,
     pub max_horizontal_games: usize,
@@ -47,7 +47,7 @@ impl MenuState {
             if latest_save.is_some() {
                 AppEvent::SpawnDialog(DynamicDialog::YesOrNo(YesOrNoDialog {
                     text: "Do you wish to load a saved state?".to_string(),
-                    value: false,
+                    value: true,
                     event_handler: Box::new(|yes| {
                         if yes {
                             AppEvent::StartEmulator {
@@ -87,16 +87,25 @@ impl MenuState {
             let y = (i / self.max_horizontal_games) as f32 * game_size + TITLE_TEXT_SIZE + MARGIN;
             let cover_url = &game.metadata.cover_url;
 
-            let texture = self
-                .textures
-                .entry(game.id)
-                .or_insert_with(|| {
-                    if let Ok(img) = self.cache.get_image(cover_url) {
-                        Texture2D::from_image(&img)
-                    } else {
-                        Texture2D::from_rgba8(8, 8, &[255u8; 8 * 8])
-                    }
-                });
+            let texture = self.textures.entry(game.id).or_insert_with(|| {
+                if let Ok(bytes) = self.cache.get_or_insert_image(cover_url, |url| {
+                    Ok(reqwest::blocking::get(url)?.bytes()?.to_vec())
+                }) {
+                    let image = image::load_from_memory(&bytes[..]).unwrap();
+                    let rgba8 = image.to_rgba8();
+                    let bytes: Vec<_> = rgba8.as_raw().as_slice().to_vec();
+
+                    let img = Image {
+                        bytes,
+                        width: rgba8.width() as u16,
+                        height: rgba8.height() as u16,
+                    };
+
+                    Texture2D::from_image(&img)
+                } else {
+                    Texture2D::from_rgba8(8, 8, &[255u8; 8 * 8])
+                }
+            });
 
             draw_texture_ex(
                 *texture,

@@ -2,6 +2,6 @@
 /cores
 /roms
 /saves
+/cache
 users.json
-*.sqlite
-image_cache
+*.sqlite*

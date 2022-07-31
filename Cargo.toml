@@ -8,8 +8,8 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.56"
 macroquad = { version = "0.3.15", features = [ ], default-features = false }
-retro-rs = { path = "retro-rs" }
-libretro-sys = { path = "libretro-sys" }
+retro-rs = { git = "https://github.com/Sinono3/retro-rs", branch = "new-features" }
+libretro-sys = { git = "https://github.com/Sinono3/libretro-sys", branch = "variadic_printf" }
 walkdir = "2.3.2"
 cpal = "0.13.5"
 sled = "0.34.7"

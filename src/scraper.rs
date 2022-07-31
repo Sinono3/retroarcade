@@ -23,7 +23,6 @@ impl IgdbClient {
     pub fn request<T: DeserializeOwned>(&self, endpoint: &str, body: &str) -> Result<T> {
         let res = self.request_raw(endpoint, body.to_string())?;
         let body = res.bytes()?;
-        dbg!(&body);
         serde_json::from_slice(&body).context("Malformed response body")
     }
 

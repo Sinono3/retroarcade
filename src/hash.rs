@@ -1,9 +1,30 @@
+use log::error;
+use sha1::{Digest, Sha1};
 use std::{
     fs::File,
-    io::{self, BufReader, Read, Write},
-    mem,
+    io::{self, Read, Write},
+    path::Path,
 };
 use thiserror::Error;
+
+pub type Sha1Hash = [u8; 20];
+
+pub fn hash_rom<P>(rom_path: P) -> Result<Sha1Hash, RomHashError>
+where
+    P: AsRef<Path>,
+{
+    let mut file = File::open(&rom_path)?;
+    let mut hasher = Sha1::new();
+
+    match rom_path.as_ref().extension().and_then(|e| e.to_str()) {
+        Some("sfc") => SnesHasher::hash(&mut file, &mut hasher),
+        Some("nes") => NesHasher::hash(&mut file, &mut hasher),
+        Some("z64") => N64Hasher::hash(&mut file, &mut hasher),
+        _ => DefaultHasher::hash(&mut file, &mut hasher),
+    }?;
+    
+    Ok(hasher.finalize().into())
+}
 
 pub trait RomHasher {
     fn hash(file: &mut File, hasher: &mut dyn Write) -> Result<(), RomHashError>;
@@ -131,7 +152,7 @@ impl RomHasher for N64Hasher {
                 n += x;
 
                 if ll <= n {
-                    
+
                 }*/
 
                 /*let mut buffer = [0u8; 4];

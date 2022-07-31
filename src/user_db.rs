@@ -29,14 +29,17 @@ pub struct SaveState {
 }
 
 impl UserDb {
-    pub fn load(users_path: &Path, saves_path: &Path) -> Result<Self> {
-        let users_file = File::open(users_path).context("opening users database")?;
+    pub fn load<P>(users_path: P, saves_path: P) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let users_file = File::open(&users_path).context("opening users database")?;
         let users: Vec<User> =
             serde_json::from_reader(users_file).context("parsing users database")?;
 
         let mut saves = HashMap::new();
 
-        for save in fs::read_dir(saves_path)? {
+        for save in fs::read_dir(&saves_path)? {
             let save = if let Ok(save) = save { save } else { continue };
             let save_path = save.path();
             let save_name = save_path.file_stem().unwrap().to_str().unwrap().to_owned();
@@ -79,8 +82,8 @@ impl UserDb {
         Ok(Self {
             users,
             saves,
-            users_path: users_path.to_path_buf(),
-            saves_path: saves_path.to_path_buf(),
+            users_path: users_path.as_ref().to_path_buf(),
+            saves_path: saves_path.as_ref().to_path_buf(),
         })
     }
 
@@ -106,11 +109,7 @@ impl UserDb {
         file.write_all(data)?;
 
         // Once written, store save metadata in memory
-        let save_state = SaveState {
-            path,
-            game,
-            date,
-        };
+        let save_state = SaveState { path, game, date };
 
         self.saves
             .entry(username.to_string())

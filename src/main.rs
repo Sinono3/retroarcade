@@ -18,7 +18,7 @@ use user_db::*;
 use macroquad::prelude::*;
 use std::{
     collections::{HashMap, VecDeque},
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 use crate::dialog::DynamicDialog;
@@ -26,22 +26,23 @@ use crate::dialog::DynamicDialog;
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
-    let game_db = GameDb::load().await.unwrap();
+    let mut cache = Cache::new("cache/hashes", "cache/image").unwrap();
+    let game_db = GameDb::load(&mut cache).await.unwrap();
 
     macroquad::Window::new("RetroArcade", async {
-        let result = macroquad_main(game_db).await;
+        let result = macroquad_main(cache, game_db).await;
         result.unwrap();
     });
 }
 
-async fn macroquad_main(game_db: GameDb) -> anyhow::Result<()> {
+async fn macroquad_main(cache: Cache, game_db: GameDb) -> anyhow::Result<()> {
     let mut app = App {
         state: AppState::Menu,
         menu: MenuState {
             game_db,
-            user_db: UserDb::load(Path::new("users.json"), Path::new("saves/"))?,
+            user_db: UserDb::load("users.json", "saves/")?,
+            cache,
             textures: HashMap::new(),
-            cache: Cache::new(Path::new("image_cache"))?,
 
             selected_game: 0,
             max_horizontal_games: 4,

@@ -6,14 +6,14 @@ use std::{
 use cpal::traits::DeviceTrait;
 use libretro_sys::PixelFormat;
 use macroquad::prelude::*;
-use retro_rs::{pixels, Buttons, Emulator};
+use retro_rs::{pixels, Buttons, Emulator, InputPort};
 
 use crate::{audio, AppEvent};
 use anyhow::Result;
 
 pub struct EmulatorState {
     emu: Emulator,
-    controllers: [Buttons; 2],
+    controllers: [InputPort; 2],
 
     // Graphics
     fb_copy: Vec<u8>,
@@ -22,7 +22,9 @@ pub struct EmulatorState {
     fb_interlace_factor: usize,
 
     // Audio
+    #[allow(dead_code)]
     audio_device: cpal::Device,
+    #[allow(dead_code)]
     audio_stream: cpal::Stream,
     audio_buffer: Arc<Mutex<Vec<i16>>>,
 }
@@ -30,15 +32,8 @@ pub struct EmulatorState {
 impl EmulatorState {
     pub fn create(core: &Path, rom: &Path, save: Option<Vec<u8>>) -> Self {
         let mut emu = Emulator::create(core, rom);
-        let controllers = [Buttons::new(), Buttons::new()];
+        let controllers = [InputPort::new(), InputPort::new()];
 
-        emu.run(controllers);
-        emu.reset();
-        emu.run(controllers);
-        emu.run(controllers);
-        emu.run(controllers);
-        emu.run(controllers);
-        emu.run(controllers);
         emu.run(controllers);
         emu.reset();
 
@@ -153,7 +148,8 @@ impl EmulatorState {
     }
 
     pub fn update(&mut self) -> AppEvent {
-        self.controllers[0] = Buttons::new()
+        let controller = &mut self.controllers[0];
+        controller.buttons = Buttons::new()
             .up(is_key_down(KeyCode::Up))
             .down(is_key_down(KeyCode::Down))
             .left(is_key_down(KeyCode::Left))
@@ -166,10 +162,47 @@ impl EmulatorState {
             .r1(is_key_down(KeyCode::E))
             .l2(is_key_down(KeyCode::Z))
             .r2(is_key_down(KeyCode::C))
-            .l3(is_key_down(KeyCode::H))
-            .r3(is_key_down(KeyCode::L))
+            //.l3(is_key_down(KeyCode::H))
+            //.r3(is_key_down(KeyCode::L))
             .start(is_key_down(KeyCode::Enter))
             .select(is_key_down(KeyCode::P));
+
+        {
+            let tex_width = self.fb_texture.width();
+            let tex_height = self.fb_texture.height();
+            let screen_width = screen_width();
+            let screen_height = screen_height();
+
+            let (width, height) = if (screen_width / screen_height) > (tex_width / tex_height) {
+                ((tex_width * screen_height) / tex_height, screen_height)
+            } else {
+                (screen_width, (tex_height * screen_width) / tex_width)
+            };
+
+            let mouse_position = mouse_position();
+            controller.mouse_x = ((mouse_position.0 / screen_width) * tex_width) as i16;
+            controller.mouse_y = ((mouse_position.1 / screen_height) * tex_height) as i16;
+            controller.mouse_left_down = is_mouse_button_down(MouseButton::Left);
+            controller.mouse_right_down = is_mouse_button_down(MouseButton::Right);
+            controller.mouse_middle_down = is_mouse_button_down(MouseButton::Middle);
+
+            controller.joystick_x = if is_key_down(KeyCode::J) {
+                -50
+            } else if is_key_down(KeyCode::L) {
+                50
+            } else {
+                0
+            };
+
+            controller.joystick_y = if is_key_down(KeyCode::I) {
+                50
+            } else if is_key_down(KeyCode::K) {
+                -50
+            } else {
+                0
+            };
+            //dbg!(controller);
+        }
 
         if is_key_down(KeyCode::Escape) {
             return AppEvent::GoToMenu;

@@ -1,18 +1,9 @@
-use crate::hash::{bytes_to_hex, DefaultHasher, N64Hasher, NesHasher, RomHasher, SnesHasher};
+use crate::{cache::Cache, hash::*};
 use anyhow::{Context, Result};
 use log::error;
-use macroquad::{
-    prelude::{Color, Image},
-    rand,
-};
-use sha1::{Digest, Sha1};
+use macroquad::{prelude::Color, rand};
 use sqlx::SqliteConnection;
-use std::{
-    collections::HashMap,
-    ffi::OsStr,
-    fs::{self, File},
-    path::PathBuf,
-};
+use std::{collections::HashMap, ffi::OsStr, fs, path::PathBuf};
 
 const CORE_DIR: &str = "cores/";
 const ROMS_DIR: &str = "roms/";
@@ -20,7 +11,7 @@ const ROMS_DIR: &str = "roms/";
 pub struct Game {
     pub id: i64,
     pub rom_path: PathBuf,
-    pub sha1: [u8; 20],
+    pub sha1: String,
     pub console_id: i64,
     pub metadata: GameMetadata,
 }
@@ -69,7 +60,7 @@ struct OpenVgdbSystem {
 }
 
 impl GameDb {
-    pub async fn load() -> Result<Self> {
+    pub async fn load(cache: &mut Cache) -> Result<Self> {
         let mut games = HashMap::new();
         let mut consoles = HashMap::new();
 
@@ -103,29 +94,21 @@ impl GameDb {
                 });
 
             for (rom_path, name) in roms_iter {
-                let mut file = File::open(&rom_path)?;
-                let mut hasher = Sha1::new();
-
-                let hash_result = match rom_path.extension().and_then(|e| e.to_str()) {
-                    Some("sfc") => SnesHasher::hash(&mut file, &mut hasher),
-                    Some("nes") => NesHasher::hash(&mut file, &mut hasher),
-                    Some("z64") => N64Hasher::hash(&mut file, &mut hasher),
-                    _ => DefaultHasher::hash(&mut file, &mut hasher),
+                let sha1 = match cache
+                    .get_or_insert_rom_hash(rom_path.to_str().unwrap(), |_| hash_rom(&rom_path))
+                {
+                    Ok(sha1) => sha1,
+                    Err(e) => {
+                        error!("ROM Hash error: {}", e);
+                        continue
+                    }
                 };
 
-                if hash_result.is_err() {
-                    error!("ROM Unsupported '{}'", name.to_str().unwrap());
-                    continue;
-                }
-
-                let sha1: [u8; 20] = hasher.finalize().into();
-                let sha1_hex = bytes_to_hex(&sha1);
-
-                let openvgdb_rom = if let Ok(rom) = get_rom_with_sha1(&mut conn, &sha1_hex).await {
-                    log::info!("ROM Found '{}': {}", name.to_str().unwrap(), sha1_hex);
+                let openvgdb_rom = if let Ok(rom) = get_rom_with_sha1(&mut conn, &sha1).await {
+                    log::info!("ROM Found '{}': {}", name.to_str().unwrap(), sha1);
                     rom
                 } else {
-                    log::error!("ROM Failed '{}': {}", name.to_str().unwrap(), sha1_hex);
+                    log::error!("ROM Failed '{}': {}", name.to_str().unwrap(), sha1);
                     continue;
                 };
 
