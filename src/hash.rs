@@ -22,7 +22,7 @@ where
         Some("z64") => N64Hasher::hash(&mut file, &mut hasher),
         _ => DefaultHasher::hash(&mut file, &mut hasher),
     }?;
-    
+
     Ok(hasher.finalize().into())
 }
 

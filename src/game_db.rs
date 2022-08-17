@@ -100,7 +100,7 @@ impl GameDb {
                     Ok(sha1) => sha1,
                     Err(e) => {
                         error!("ROM Hash error: {}", e);
-                        continue
+                        continue;
                     }
                 };
 

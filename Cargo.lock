@@ -1064,6 +1064,7 @@ dependencies = [
 [[package]]
 name = "libretro-sys"
 version = "0.1.1"
+source = "git+https://github.com/Sinono3/libretro-sys?branch=variadic_printf#951ea96e67d49b7f8de7d1037dad2869917ecc4f"
 dependencies = [
  "libc",
 ]
@@ -1801,6 +1802,7 @@ dependencies = [
 [[package]]
 name = "retro-rs"
 version = "0.3.2"
+source = "git+https://github.com/Sinono3/retro-rs?branch=new-features#63ef2eb2217d2c70914453038f802c68169d3d5f"
 dependencies = [
  "image 0.21.3",
  "lazy_static",

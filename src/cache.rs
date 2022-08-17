@@ -1,7 +1,7 @@
 use macroquad::prelude::Image;
 use std::path::Path;
 
-use crate::hash::{bytes_to_hex, Sha1Hash, RomHashError};
+use crate::hash::{bytes_to_hex, RomHashError, Sha1Hash};
 
 pub struct Cache {
     hash_cache: sled::Db,
