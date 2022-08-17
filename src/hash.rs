@@ -1,10 +1,11 @@
-use log::error;
-use sha1::{Digest, Sha1};
 use std::{
     fs::File,
     io::{self, Read, Write},
     path::Path,
 };
+
+use log::error;
+use sha1::{Digest, Sha1};
 use thiserror::Error;
 
 pub type Sha1Hash = [u8; 20];

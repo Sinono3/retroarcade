@@ -3,13 +3,13 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use anyhow::Result;
 use cpal::traits::DeviceTrait;
 use libretro_sys::PixelFormat;
 use macroquad::prelude::*;
 use retro_rs::{pixels, Buttons, Emulator, InputPort};
 
 use crate::{audio, AppEvent};
-use anyhow::Result;
 
 pub struct EmulatorState {
     emu: Emulator,

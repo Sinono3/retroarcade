@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use macroquad::prelude::*;
+
 use crate::{
     cache::Cache,
     dialog::{DynamicDialog, YesOrNoDialog},
@@ -7,7 +9,6 @@ use crate::{
     user_db::{SaveState, UserDb},
     AppEvent,
 };
-use macroquad::prelude::*;
 
 pub struct MenuState {
     pub game_db: GameDb,

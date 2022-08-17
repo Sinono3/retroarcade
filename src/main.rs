@@ -7,19 +7,19 @@ mod hash;
 mod menu;
 mod user_db;
 
+use std::{
+    collections::{HashMap, VecDeque},
+    path::PathBuf,
+};
+
 use cache::Cache;
 use chrono::Utc;
 use dialog::{Dialog, DialogUpdate};
 use emulator::*;
 use game_db::*;
+use macroquad::prelude::*;
 use menu::*;
 use user_db::*;
-
-use macroquad::prelude::*;
-use std::{
-    collections::{HashMap, VecDeque},
-    path::PathBuf,
-};
 
 use crate::dialog::DynamicDialog;
 

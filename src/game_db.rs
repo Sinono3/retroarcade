@@ -1,9 +1,11 @@
-use crate::{cache::Cache, hash::*};
+use std::{collections::HashMap, ffi::OsStr, fs, path::PathBuf};
+
 use anyhow::{Context, Result};
 use log::error;
 use macroquad::{prelude::Color, rand};
 use sqlx::SqliteConnection;
-use std::{collections::HashMap, ffi::OsStr, fs, path::PathBuf};
+
+use crate::{cache::Cache, hash::*};
 
 const CORE_DIR: &str = "cores/";
 const ROMS_DIR: &str = "roms/";
