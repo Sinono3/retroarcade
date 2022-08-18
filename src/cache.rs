@@ -1,7 +1,5 @@
 use std::path::Path;
 
-use macroquad::prelude::Image;
-
 use crate::hash::{bytes_to_hex, RomHashError, Sha1Hash};
 
 pub struct Cache {

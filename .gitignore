@@ -3,5 +3,4 @@
 /roms
 /saves
 /cache
-users.json
 *.sqlite*

@@ -6,21 +6,21 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.56"
-macroquad = { version = "0.3.15", features = [ ], default-features = false }
+anyhow = "1.0.62"
+macroquad = { version = "0.3.23", features = [ ], default-features = false }
 retro-rs = { git = "https://github.com/Sinono3/retro-rs", branch = "new-features" }
 libretro-sys = { git = "https://github.com/Sinono3/libretro-sys", branch = "variadic_printf" }
 walkdir = "2.3.2"
 cpal = "0.13.5"
 sled = "0.34.7"
-serde = { version = "1.0", features = [ "derive" ] }
-serde_json = "1.0"
-chrono = { version = "0.4.19", features = ["serde"] }
-reqwest = { version = "0.11.10", features = ["blocking"] }
-sqlx = { version = "0.5.13", features = ["sqlite", "runtime-tokio-rustls"] }
-sha-1 = { version = "0.10", features = ["std"] }
-thiserror = "1.0.31"
-tokio = { version = "1", features = ["full"] }
+serde = { version = "1.0.143", features = [ "derive" ] }
+chrono = { version = "0.4.22", features = ["serde"] }
+reqwest = { version = "0.11.11", features = ["blocking"] }
+sqlx = { version = "0.6.1", features = ["sqlite", "runtime-tokio-rustls"] }
+sha-1 = { version = "0.10.0", features = ["std"] }
+thiserror = "1.0.32"
+tokio = { version = "1.20.1", features = ["full"] }
 log = "0.4.17"
 pretty_env_logger = "0.4.0"
-image = { version = "0.23.14", features = ["png", "tga", "jpeg"] }
+image = { version = "0.24.3", features = ["png", "tga", "jpeg"] }
+toml = "0.5.9"

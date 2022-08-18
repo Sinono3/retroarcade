@@ -1,27 +1,30 @@
 mod audio;
 mod cache;
+mod config;
 mod dialog;
 mod emulator;
 mod game_db;
 mod hash;
 mod menu;
-mod user_db;
+mod saves;
 
 use std::{
     collections::{HashMap, VecDeque},
     path::PathBuf,
 };
 
-use cache::Cache;
 use chrono::Utc;
-use dialog::{Dialog, DialogUpdate};
-use emulator::*;
-use game_db::*;
 use macroquad::prelude::*;
-use menu::*;
-use user_db::*;
 
-use crate::dialog::DynamicDialog;
+use crate::{
+    cache::Cache,
+    config::*,
+    dialog::{Dialog, DialogUpdate, DynamicDialog},
+    emulator::*,
+    game_db::*,
+    menu::*,
+    saves::Saves,
+};
 
 #[tokio::main]
 async fn main() {
@@ -36,17 +39,22 @@ async fn main() {
 }
 
 async fn macroquad_main(cache: Cache, game_db: GameDb) -> anyhow::Result<()> {
+    let config = Config::load("retroarcade.toml")?;
+    let current_user = config.default_user.clone();
+    let max_horizontal_games = config.max_horizontal_games;
+
     let mut app = App {
         state: AppState::Menu,
         menu: MenuState {
             game_db,
-            user_db: UserDb::load("users.json", "saves/")?,
+            config,
+            saves: Saves::load("saves/")?,
             cache,
             textures: HashMap::new(),
 
             selected_game: 0,
-            max_horizontal_games: 4,
-            current_user: "sinono3".to_string(),
+            max_horizontal_games,
+            current_user,
         },
         emulator: None,
 
@@ -73,7 +81,7 @@ async fn macroquad_main(cache: Cache, game_db: GameDb) -> anyhow::Result<()> {
                         .id;
 
                     app.menu
-                        .user_db
+                        .saves
                         .save(&save_buffer, username, game, Utc::now())?;
                 }
 

@@ -173,12 +173,6 @@ impl EmulatorState {
             let screen_width = screen_width();
             let screen_height = screen_height();
 
-            let (width, height) = if (screen_width / screen_height) > (tex_width / tex_height) {
-                ((tex_width * screen_height) / tex_height, screen_height)
-            } else {
-                (screen_width, (tex_height * screen_width) / tex_width)
-            };
-
             let mouse_position = mouse_position();
             controller.mouse_x = ((mouse_position.0 / screen_width) * tex_width) as i16;
             controller.mouse_y = ((mouse_position.1 / screen_height) * tex_height) as i16;
@@ -201,7 +195,6 @@ impl EmulatorState {
             } else {
                 0
             };
-            //dbg!(controller);
         }
 
         if is_key_down(KeyCode::Escape) {

@@ -1,24 +1,18 @@
-use std::fs::{self, File};
-use std::io::Write;
-use std::path::Path;
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fs::{self, File},
+    io::Write,
+    path::{Path, PathBuf},
+};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct UserDb {
-    pub users: Vec<User>,
+pub struct Saves {
     pub saves: HashMap<String, Vec<SaveState>>,
-    pub users_path: PathBuf,
-    pub saves_path: PathBuf,
-}
-
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
-pub struct User {
-    pub username: String,
-    pub password: String,
+    pub path: PathBuf,
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
@@ -28,34 +22,20 @@ pub struct SaveState {
     pub date: chrono::DateTime<Utc>,
 }
 
-impl UserDb {
-    pub fn load<P>(users_path: P, saves_path: P) -> Result<Self>
+impl Saves {
+    pub fn load<P>(path: P) -> Result<Self>
     where
         P: AsRef<Path>,
     {
-        let users_file = File::open(&users_path).context("opening users database")?;
-        let users: Vec<User> =
-            serde_json::from_reader(users_file).context("parsing users database")?;
-
         let mut saves = HashMap::new();
 
-        for save in fs::read_dir(&saves_path)? {
+        for save in fs::read_dir(&path)? {
             let save = if let Ok(save) = save { save } else { continue };
             let save_path = save.path();
             let save_name = save_path.file_stem().unwrap().to_str().unwrap().to_owned();
             let parts: Vec<&str> = save_name.splitn(3, "_").collect();
 
             if let [username, game, date_time] = parts[0..3] {
-                let username_exists = users
-                    .iter()
-                    .filter(|u| u.username == username)
-                    .next()
-                    .is_some();
-
-                if !username_exists {
-                    continue;
-                }
-
                 let save_vec = saves
                     .entry(username.to_string())
                     .or_insert_with(|| Vec::new());
@@ -79,11 +59,9 @@ impl UserDb {
             }
         }
 
-        Ok(Self {
-            users,
+        Ok(Saves {
             saves,
-            users_path: users_path.as_ref().to_path_buf(),
-            saves_path: saves_path.as_ref().to_path_buf(),
+            path: path.as_ref().to_path_buf(),
         })
     }
 
@@ -94,7 +72,7 @@ impl UserDb {
         game: i64,
         date: DateTime<Utc>,
     ) -> Result<()> {
-        let mut path = self.saves_path.clone();
+        let mut path = self.path.clone();
 
         path.push(format!(
             "{}_{}_{}_{}.sav",
