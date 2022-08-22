@@ -43,6 +43,23 @@ async fn macroquad_main(cache: Cache, game_db: GameDb) -> anyhow::Result<()> {
     let current_user = config.default_user.clone();
     let max_horizontal_games = config.max_horizontal_games;
 
+    let glowing_material = load_material(
+        include_str!("shaders/glowing_vert.glsl"),
+        include_str!("shaders/glowing_frag.glsl"),
+        MaterialParams {
+            uniforms: vec![
+                ("time".to_string(), UniformType::Float1),
+                ("glowFrequency".to_string(), UniformType::Float1),
+                ("glowIntensity".to_string(), UniformType::Float1),
+                ("zoomFactor".to_string(), UniformType::Float1),
+            ],
+            ..Default::default()
+        },
+    )?;
+    glowing_material.set_uniform("glowFrequency", 1.0f32);
+    glowing_material.set_uniform("glowIntensity", 1.0f32);
+    glowing_material.set_uniform("zoomFactor", 0.2f32);
+
     let mut app = App {
         state: AppState::Menu,
         menu: MenuState {
@@ -55,6 +72,9 @@ async fn macroquad_main(cache: Cache, game_db: GameDb) -> anyhow::Result<()> {
             selected_game: 0,
             max_horizontal_games,
             current_user,
+
+            glowing_material,
+            glowing_material_time: 0.0,
         },
         emulator: None,
 

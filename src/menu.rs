@@ -21,15 +21,24 @@ pub struct MenuState {
     pub selected_game: usize,
     pub max_horizontal_games: usize,
     pub current_user: String,
+
+    pub glowing_material: Material,
+    pub glowing_material_time: f32,
 }
 
 impl MenuState {
     pub fn update(&mut self) -> AppEvent {
+        let previous_game = self.selected_game;
+
         selected_game_input(
             &mut self.selected_game,
             &mut self.max_horizontal_games,
             self.game_db.games.len(),
         );
+
+        if self.selected_game != previous_game {
+            self.glowing_material_time = 0.0;
+        }
 
         if is_key_pressed(KeyCode::Enter) {
             let game = &self.game_db.games.values().nth(self.selected_game).unwrap();
@@ -126,6 +135,13 @@ impl MenuState {
                 }
             });
 
+            if id == self.selected_game {
+                self.glowing_material_time += get_frame_time();
+                self.glowing_material
+                    .set_uniform("time", self.glowing_material_time);
+                gl_use_material(self.glowing_material);
+            }
+
             draw_texture_ex(
                 *texture,
                 x,
@@ -142,6 +158,7 @@ impl MenuState {
             );
 
             if id == self.selected_game {
+                gl_use_default_material();
                 draw_rectangle_lines(x, y, game_size, game_size, 8.0, BLACK);
             }
         }
@@ -153,6 +170,13 @@ impl MenuState {
             let console = &self.game_db.consoles[&game.console_id];
 
             // Show console name
+            draw_rectangle(
+                0.0,
+                screen_height() - MARGIN - 24.0,
+                screen_width(),
+                MARGIN + 24.0,
+                LIGHTGRAY,
+            );
             draw_text(
                 &console.name,
                 20.0,
