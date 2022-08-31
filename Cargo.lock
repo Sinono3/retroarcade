@@ -1988,7 +1988,7 @@ dependencies = [
 [[package]]
 name = "retro-rs"
 version = "0.3.2"
-source = "git+https://github.com/Sinono3/retro-rs?branch=new-features#63ef2eb2217d2c70914453038f802c68169d3d5f"
+source = "git+https://github.com/Sinono3/retro-rs?branch=new-features#5dcafdb058b64b8728d0c4ae24fbd515a98bc001"
 dependencies = [
  "image 0.21.3",
  "lazy_static",

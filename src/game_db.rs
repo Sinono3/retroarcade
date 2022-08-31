@@ -1,9 +1,4 @@
-use std::{
-    collections::HashMap,
-    ffi::{CStr, OsStr},
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, ffi::OsStr, fs, path::PathBuf};
 
 use anyhow::{Context, Result};
 use log::error;
@@ -17,17 +12,19 @@ const CORE_DIR: &str = "cores/";
 const ROMS_DIR: &str = "roms/";
 
 pub struct Game {
-    pub id: i64,
     pub system_id: i64,
-    pub rom_path: PathBuf,
     pub sha1: String,
-    pub metadata: GameMetadata,
+    pub metadata: Option<GameMetadata>,
+    pub filename: String,
+    pub extension: String,
+    pub rom_path: PathBuf,
+    pub color: Color,
 }
 
 pub struct GameMetadata {
+    pub release_id: i64,
     pub title: String,
     pub cover_url: String,
-    pub color: Color,
 }
 
 pub struct System {
@@ -38,8 +35,15 @@ pub struct System {
 }
 
 pub struct GameDb {
-    pub games: HashMap<i64, Game>,
-    pub systems: HashMap<i64, System>,
+    systems: HashMap<i64, System>,
+    games: HashMap<i64, Game>,
+    untagged_games: Vec<Game>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum GameId {
+    Tagged(i64),
+    Untagged(usize),
 }
 
 #[derive(Clone, PartialEq, Eq, sqlx::FromRow)]
@@ -73,6 +77,7 @@ impl GameDb {
     pub async fn load(cache: &mut Cache) -> Result<Self> {
         let mut games = HashMap::new();
         let mut systems = HashMap::new();
+        let mut untagged_games = Vec::new();
 
         // TODO: download openvgdb
         let openvgdb = sqlx::SqlitePool::connect("openvgdb.sqlite").await?;
@@ -104,27 +109,16 @@ impl GameDb {
                         _ => continue,
                     }
                 } else {
-                    log::info!(
-                        "Couldn't find system for extensions: {:?}",
-                        extensions
-                    );
-
-                    // Insert default system
-                    systems.insert(
-                        -1,
-                        System {
-                            id: -1,
-                            core_path: core_path.clone(),
-                            extensions,
-                            name: "Generic".to_string(),
-                        },
-                    );
+                    log::error!("Couldn't find system for extensions: {:?}", extensions);
                     continue 'cores;
                 }
             };
 
             // Insert system if not yet in DB
-            if !systems.iter().any(|(_, s)| s.name == short_name) {
+            if !systems
+                .iter()
+                .any(|(_, s): (_, &System)| s.name == short_name)
+            {
                 let openvgdb_system = get_system_with_short_name(&mut conn, short_name).await?;
                 log::info!(
                     "Inserted system '{}' for extensions: {:?}",
@@ -137,12 +131,25 @@ impl GameDb {
                     System {
                         id: openvgdb_system.system_id,
                         core_path: core_path.clone(),
-                        extensions,
                         name: openvgdb_system.system_short_name,
+                        extensions,
                     },
                 );
             }
         }
+
+        let convert = |o: &OsStr| o.to_string_lossy().to_string();
+        let find_system_id_for_extension = |ext_a: &str| {
+            systems.iter().find_map(|(id, system)| {
+                let ext_a = ext_a.to_lowercase();
+
+                system
+                    .extensions
+                    .iter()
+                    .find(|ext_b| ext_a == ext_b.as_str())
+                    .map(|_| *id)
+            })
+        };
 
         for (rom_path, name) in walkdir::WalkDir::new(ROMS_DIR)
             .into_iter()
@@ -154,6 +161,8 @@ impl GameDb {
                 Some((path, name))
             })
         {
+            let filename = convert(&name);
+            let extension = convert(rom_path.extension().unwrap());
             let sha1 = match cache
                 .get_or_insert_rom_hash(rom_path.to_str().unwrap(), |_| hash_rom(&rom_path))
             {
@@ -164,33 +173,31 @@ impl GameDb {
                 }
             };
 
-            let openvgdb_rom = if let Ok(rom) = get_rom_with_sha1(&mut conn, &sha1).await {
+            if let Ok(openvgdb_rom) = get_rom_with_sha1(&mut conn, &sha1).await {
                 log::info!("ROM Found '{}': {}", name.to_str().unwrap(), sha1);
-                rom
-            } else {
-                log::error!("ROM Failed '{}': {}", name.to_str().unwrap(), sha1);
-                continue;
-            };
+                let openvgdb_release = if let Ok(release) =
+                    get_release_with_rom_id(&mut conn, openvgdb_rom.rom_id).await
+                {
+                    release
+                } else {
+                    continue;
+                };
 
-            let openvgdb_release = if let Ok(release) =
-                get_release_with_rom_id(&mut conn, openvgdb_rom.rom_id).await
-            {
-                release
-            } else {
-                continue;
-            };
+                let metadata = Some(GameMetadata {
+                    release_id: openvgdb_rom.rom_id,
+                    title: openvgdb_release.release_title_name,
+                    cover_url: openvgdb_release.release_cover_front,
+                });
 
-            games.insert(
-                openvgdb_rom.rom_id,
-                Game {
-                    id: openvgdb_rom.rom_id,
-                    system_id: openvgdb_rom.system_id,
-                    rom_path,
-                    sha1,
-
-                    metadata: GameMetadata {
-                        title: openvgdb_release.release_title_name,
-                        cover_url: openvgdb_release.release_cover_front,
+                games.insert(
+                    openvgdb_rom.rom_id,
+                    Game {
+                        system_id: openvgdb_rom.system_id,
+                        sha1,
+                        metadata,
+                        filename,
+                        extension,
+                        rom_path,
                         color: Color::from_rgba(
                             rand::gen_range(0u8, 255u8),
                             rand::gen_range(0u8, 255u8),
@@ -198,11 +205,73 @@ impl GameDb {
                             255,
                         ),
                     },
-                },
-            );
+                );
+            } else if let Some(system_id) = find_system_id_for_extension(&extension) {
+                // Separate games into games with metadata and untagged games
+                log::warn!(
+                    "ROM Failed (extension fallback) '{}': {}",
+                    name.to_str().unwrap(),
+                    sha1
+                );
+
+                untagged_games.push(Game {
+                    system_id,
+                    sha1,
+                    metadata: None,
+                    filename,
+                    extension,
+                    rom_path,
+                    color: Color::from_rgba(
+                        rand::gen_range(0u8, 255u8),
+                        rand::gen_range(0u8, 255u8),
+                        rand::gen_range(0u8, 255u8),
+                        255,
+                    ),
+                });
+            } else {
+                log::error!("ROM Failed '{}': {}", name.to_str().unwrap(), sha1);
+            };
         }
 
-        Ok(GameDb { games, systems })
+        Ok(GameDb {
+            systems,
+            games,
+            untagged_games,
+        })
+    }
+
+    pub fn systems(&self) -> &HashMap<i64, System> {
+        &self.systems
+    }
+
+    pub fn games_iter(&self) -> impl Iterator<Item = (GameId, &Game)> {
+        let games_iter = self
+            .games
+            .iter()
+            .map(|(id, game)| (GameId::Tagged(*id), game));
+
+        let untagged_iter = self
+            .untagged_games
+            .iter()
+            .enumerate()
+            .map(|(idx, game)| (GameId::Untagged(idx), game));
+
+        games_iter.chain(untagged_iter)
+    }
+
+    pub fn systems_iter(&self) -> impl Iterator<Item = (&i64, &System)> {
+        self.systems.iter()
+    }
+
+    pub fn get_game(&self, id: GameId) -> &Game {
+        match id {
+            GameId::Tagged(id) => &self.games[&id],
+            GameId::Untagged(idx) => &self.untagged_games[idx],
+        }
+    }
+
+    pub fn get_system(&self, id: i64) -> &System {
+        &self.systems[&id]
     }
 }
 
@@ -245,26 +314,6 @@ async fn get_release_with_rom_id(
         ORDER BY releaseDate
         "#,
         rom_id,
-    )
-    .fetch_one(conn)
-    .await
-}
-
-async fn get_system_with_id(
-    conn: &mut SqliteConnection,
-    id: i64,
-) -> Result<OpenVgdbSystem, sqlx::Error> {
-    sqlx::query_as!(
-        OpenVgdbSystem,
-        r#"
-        SELECT 
-            systemID as "system_id!: _",
-            systemName as "system_name!: _", 
-            systemShortName as "system_short_name!: _"
-        FROM SYSTEMS 
-        WHERE systemID = $1
-        "#,
-        id,
     )
     .fetch_one(conn)
     .await

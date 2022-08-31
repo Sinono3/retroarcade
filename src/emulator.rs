@@ -7,7 +7,7 @@ use anyhow::Result;
 use cpal::traits::DeviceTrait;
 use libretro_sys::PixelFormat;
 use macroquad::prelude::*;
-use retro_rs::{pixels, Buttons, Emulator, InputPort};
+use retro_rs::{pixels, Buttons, Emulator, InputPort, RetroRsError};
 
 use crate::{audio, AppEvent};
 
@@ -228,39 +228,43 @@ impl EmulatorState {
         let pixfmt = self.emu.pixel_format();
 
         // Copy framebuffer
-        self.emu
-            .peek_framebuffer(|fb: &[u8]| {
-                let pixel_size = match pixfmt {
-                    PixelFormat::ARGB1555 => 2,
-                    PixelFormat::ARGB8888 => 4,
-                    PixelFormat::RGB565 => 2,
-                };
+        let framebuffer_result = self.emu.peek_framebuffer(|fb: &[u8]| {
+            let pixel_size = match pixfmt {
+                PixelFormat::ARGB1555 => 2,
+                PixelFormat::ARGB8888 => 4,
+                PixelFormat::RGB565 => 2,
+            };
 
-                let color_fn: Box<dyn Fn(&[u8]) -> (u8, u8, u8)> = match pixfmt {
-                    PixelFormat::ARGB1555 => unimplemented!(),
-                    PixelFormat::ARGB8888 => Box::new(|b| (b[2], b[1], b[0])),
-                    PixelFormat::RGB565 => Box::new(|b| pixels::rgb565to888(b[0], b[1])),
-                };
+            let color_fn: Box<dyn Fn(&[u8]) -> (u8, u8, u8)> = match pixfmt {
+                PixelFormat::ARGB1555 => unimplemented!(),
+                PixelFormat::ARGB8888 => Box::new(|b| (b[2], b[1], b[0])),
+                PixelFormat::RGB565 => Box::new(|b| pixels::rgb565to888(b[0], b[1])),
+            };
 
-                for y in 0..fb_height {
-                    for x in 0..fb_width {
-                        let tex_index = (fb_width * y + x) * 4;
-                        let fb_index = (fb_pitch * y) + (x * pixel_size);
+            for y in 0..fb_height {
+                for x in 0..fb_width {
+                    let tex_index = (fb_width * y + x) * 4;
+                    let fb_index = (fb_pitch * y) + (x * pixel_size);
 
-                        if (fb_index + 2) >= fb.len() {
-                            continue;
-                        }
-
-                        let (red, green, blue) = color_fn(&fb[fb_index..fb_index + pixel_size]);
-
-                        self.fb_image.bytes[tex_index + 0] = red; // R
-                        self.fb_image.bytes[tex_index + 1] = green; // G
-                        self.fb_image.bytes[tex_index + 2] = blue; // B
-                        self.fb_image.bytes[tex_index + 3] = 0xFF; // A
+                    if (fb_index + 2) >= fb.len() {
+                        continue;
                     }
+
+                    let (red, green, blue) = color_fn(&fb[fb_index..fb_index + pixel_size]);
+
+                    self.fb_image.bytes[tex_index + 0] = red; // R
+                    self.fb_image.bytes[tex_index + 1] = green; // G
+                    self.fb_image.bytes[tex_index + 2] = blue; // B
+                    self.fb_image.bytes[tex_index + 3] = 0xFF; // A
                 }
-            })
-            .unwrap();
+            }
+        });
+
+        match framebuffer_result {
+            Err(RetroRsError::NoFramebufferError) => log::warn!("No framebuffer!"),
+            Err(e) => panic!("{}", e),
+            Ok(_) => (),
+        }
 
         self.fb_texture.update(&self.fb_image);
     }
