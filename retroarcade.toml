@@ -1,6 +1,1 @@
-default_user = "user"
 max_horizontal_games = 4
-
-[[users]]
-username = "user"
-password = "pass"

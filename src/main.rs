@@ -6,14 +6,12 @@ mod emulator;
 mod game_db;
 mod hash;
 mod menu;
-mod saves;
 
 use std::{
     collections::{HashMap, VecDeque},
     path::PathBuf,
 };
 
-use chrono::Utc;
 use macroquad::prelude::*;
 
 use crate::{
@@ -23,7 +21,6 @@ use crate::{
     emulator::*,
     game_db::*,
     menu::*,
-    saves::Saves,
 };
 
 #[tokio::main]
@@ -40,7 +37,6 @@ async fn main() {
 
 async fn macroquad_main(cache: Cache, game_db: GameDb) -> anyhow::Result<()> {
     let config = Config::load("retroarcade.toml")?;
-    let current_user = config.default_user.clone();
     let max_horizontal_games = config.max_horizontal_games;
 
     let glowing_material = load_material(
@@ -65,13 +61,11 @@ async fn macroquad_main(cache: Cache, game_db: GameDb) -> anyhow::Result<()> {
         menu: MenuState {
             game_db,
             config,
-            saves: Saves::load("saves/")?,
             cache,
             textures: HashMap::new(),
 
             selected_game: 0,
             max_horizontal_games,
-            current_user,
 
             glowing_material,
             glowing_material_time: 0.0,
@@ -88,23 +82,6 @@ async fn macroquad_main(cache: Cache, game_db: GameDb) -> anyhow::Result<()> {
         match event {
             AppEvent::Continue => (),
             AppEvent::GoToMenu => {
-                if let Some(emulator) = app.emulator {
-                    let save_buffer = emulator.snapshot();
-                    let username = &app.menu.current_user;
-                    let game = app
-                        .menu
-                        .game_db
-                        .games
-                        .values()
-                        .nth(app.menu.selected_game)
-                        .unwrap()
-                        .id;
-
-                    app.menu
-                        .saves
-                        .save(&save_buffer, username, game, Utc::now())?;
-                }
-
                 app.state = AppState::Menu;
                 app.emulator = None;
             }

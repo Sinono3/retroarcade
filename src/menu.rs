@@ -5,22 +5,18 @@ use macroquad::prelude::*;
 use crate::{
     cache::Cache,
     config::Config,
-    dialog::{DynamicDialog, YesOrNoDialog},
     game_db::GameDb,
-    saves::{SaveState, Saves},
     AppEvent,
 };
 
 pub struct MenuState {
     pub game_db: GameDb,
     pub config: Config,
-    pub saves: Saves,
     pub cache: Cache,
     pub textures: HashMap<i64, Texture2D>,
 
     pub selected_game: usize,
     pub max_horizontal_games: usize,
-    pub current_user: String,
 
     pub glowing_material: Material,
     pub glowing_material_time: f32,
@@ -42,51 +38,15 @@ impl MenuState {
 
         if is_key_pressed(KeyCode::Enter) {
             let game = &self.game_db.games.values().nth(self.selected_game).unwrap();
-            let console = &self.game_db.consoles[&game.console_id];
-
-            let mut saves: Vec<&SaveState> = self
-                .saves
-                .saves
-                .get(&self.current_user)
-                .iter()
-                .map(|h| *h)
-                .flatten()
-                .filter(|s| s.game == game.id)
-                .collect();
-
-            saves.sort_by_key(|s| s.date);
+            let system = &self.game_db.systems[&game.system_id];
 
             let rom = game.rom_path.clone();
-            let core = console.core_path.clone();
+            let core = system.core_path.clone();
 
-            let latest_save = saves.last().and_then(|s| std::fs::read(&s.path).ok());
-
-            if latest_save.is_some() {
-                AppEvent::SpawnDialog(DynamicDialog::YesOrNo(YesOrNoDialog {
-                    text: "Do you wish to load a saved state?".to_string(),
-                    value: true,
-                    event_handler: Box::new(|yes| {
-                        if yes {
-                            AppEvent::StartEmulator {
-                                core,
-                                rom,
-                                save: latest_save,
-                            }
-                        } else {
-                            AppEvent::StartEmulator {
-                                core,
-                                rom,
-                                save: None,
-                            }
-                        }
-                    }),
-                }))
-            } else {
-                AppEvent::StartEmulator {
-                    core,
-                    rom,
-                    save: None,
-                }
+            AppEvent::StartEmulator {
+                core,
+                rom,
+                save: None,
             }
         } else {
             AppEvent::Continue
@@ -94,7 +54,7 @@ impl MenuState {
     }
 
     pub fn render(&mut self) {
-        clear_background(LIGHTGRAY);
+        clear_background(DARKGRAY);
 
         let games = &self.game_db.games.values();
         let game_size = (screen_width() / self.max_horizontal_games as f32) as f32;
@@ -167,7 +127,7 @@ impl MenuState {
         const TITLE_TEXT_SIZE: f32 = 30.0;
 
         if let Some(game) = games.clone().nth(self.selected_game) {
-            let console = &self.game_db.consoles[&game.console_id];
+            let console = &self.game_db.systems[&game.system_id];
 
             // Show console name
             draw_rectangle(
@@ -175,14 +135,14 @@ impl MenuState {
                 screen_height() - MARGIN - 24.0,
                 screen_width(),
                 MARGIN + 24.0,
-                LIGHTGRAY,
+                DARKGRAY,
             );
             draw_text(
                 &console.name,
                 20.0,
                 screen_height() - MARGIN,
                 TITLE_TEXT_SIZE,
-                DARKGRAY,
+                LIGHTGRAY,
             );
 
             // Show game title
@@ -191,7 +151,7 @@ impl MenuState {
                 20.0,
                 TITLE_TEXT_SIZE,
                 TITLE_TEXT_SIZE,
-                DARKGRAY,
+                LIGHTGRAY,
             );
         }
     }
