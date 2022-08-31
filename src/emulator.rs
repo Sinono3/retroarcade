@@ -235,7 +235,8 @@ impl EmulatorState {
                 PixelFormat::RGB565 => 2,
             };
 
-            let color_fn: Box<dyn Fn(&[u8]) -> (u8, u8, u8)> = match pixfmt {
+            type ColorFn = Box<dyn Fn(&[u8]) -> (u8, u8, u8)>;
+            let color_fn: ColorFn = match pixfmt {
                 PixelFormat::ARGB1555 => unimplemented!(),
                 PixelFormat::ARGB8888 => Box::new(|b| (b[2], b[1], b[0])),
                 PixelFormat::RGB565 => Box::new(|b| pixels::rgb565to888(b[0], b[1])),
@@ -252,7 +253,7 @@ impl EmulatorState {
 
                     let (red, green, blue) = color_fn(&fb[fb_index..fb_index + pixel_size]);
 
-                    self.fb_image.bytes[tex_index + 0] = red; // R
+                    self.fb_image.bytes[tex_index] = red; // R
                     self.fb_image.bytes[tex_index + 1] = green; // G
                     self.fb_image.bytes[tex_index + 2] = blue; // B
                     self.fb_image.bytes[tex_index + 3] = 0xFF; // A

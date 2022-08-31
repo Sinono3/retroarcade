@@ -16,9 +16,9 @@ where
     let config = device.default_output_config()?;
 
     let stream = match config.sample_format() {
-        cpal::SampleFormat::F32 => run_with_format::<f32, F>(&device, &config.into(), source)?,
-        cpal::SampleFormat::I16 => run_with_format::<i16, F>(&device, &config.into(), source)?,
-        cpal::SampleFormat::U16 => run_with_format::<u16, F>(&device, &config.into(), source)?,
+        cpal::SampleFormat::F32 => run_with_format::<f32, F>(device, &config.into(), source)?,
+        cpal::SampleFormat::I16 => run_with_format::<i16, F>(device, &config.into(), source)?,
+        cpal::SampleFormat::U16 => run_with_format::<u16, F>(device, &config.into(), source)?,
     };
 
     Ok(stream)
@@ -54,11 +54,7 @@ where
             let mut sample_iter = buf.chunks_exact(2);
 
             for output_frame in output.chunks_mut(channels) {
-                let sample_frame = match sample_iter.next() {
-                    None => &[0, 0],
-                    Some(sample) => sample,
-                };
-
+                let sample_frame = sample_iter.next().unwrap_or(&[0, 0]);
                 output_frame[0] = convert_sample(sample_frame[0]);
                 output_frame[1] = convert_sample(sample_frame[1]);
             }
