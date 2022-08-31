@@ -1,1 +1,6 @@
-max_horizontal_games = 4
+max_tile_size = 200
+
+[[system]]
+id = -1
+name = "DOOM"
+extensions = ["wad"]

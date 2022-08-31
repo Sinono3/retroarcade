@@ -11,7 +11,7 @@ pub struct MenuState {
     pub textures: HashMap<i64, Texture2D>,
 
     pub selected_game: usize,
-    pub max_horizontal_games: usize,
+    pub max_tile_size: usize,
 
     pub glowing_material: Material,
     pub glowing_material_time: f32,
@@ -19,11 +19,12 @@ pub struct MenuState {
 
 impl MenuState {
     pub fn update(&mut self) -> AppEvent {
+        let row_width = screen_width() as usize / self.max_tile_size;
         let previous_game = self.selected_game;
 
         selected_game_input(
             &mut self.selected_game,
-            &mut self.max_horizontal_games,
+            row_width,
             self.game_db.games_iter().count(),
         );
 
@@ -51,9 +52,9 @@ impl MenuState {
     pub fn render(&mut self) {
         clear_background(DARKGRAY);
 
-        let game_size = (screen_width() / self.max_horizontal_games as f32) as f32;
-
-        let current_row = self.selected_game / self.max_horizontal_games;
+        let row_width = screen_width() as usize / self.max_tile_size;
+        let game_size = (screen_width() / row_width as f32) as f32;
+        let current_row = self.selected_game / row_width;
         let max_rows = (screen_height() - MARGIN) / game_size;
         // Max rows / 2 because the scrolling needs to happen before
         let scroll = (current_row as usize).saturating_sub(max_rows as usize / 2);
@@ -62,13 +63,11 @@ impl MenuState {
             .game_db
             .games_iter()
             .enumerate()
-            .skip(scroll * self.max_horizontal_games)
+            .skip(scroll * row_width)
             .enumerate()
         {
-            let x = (gfx_counter % self.max_horizontal_games) as f32 * game_size;
-            let y = (gfx_counter / self.max_horizontal_games) as f32 * game_size
-                + TITLE_TEXT_SIZE
-                + MARGIN;
+            let x = (gfx_counter % row_width) as f32 * game_size;
+            let y = (gfx_counter / row_width) as f32 * game_size + TITLE_TEXT_SIZE + MARGIN;
 
             if counter == self.selected_game {
                 self.glowing_material_time += get_frame_time();
@@ -130,7 +129,7 @@ impl MenuState {
         const TITLE_TEXT_SIZE: f32 = 30.0;
 
         if let Some((_id, game)) = self.game_db.games_iter().nth(self.selected_game) {
-            let console = &self.game_db.get_system(game.system_id);
+            let system = &self.game_db.get_system(game.system_id);
 
             // Show console name
             draw_rectangle(
@@ -141,7 +140,7 @@ impl MenuState {
                 DARKGRAY,
             );
             draw_text(
-                &console.name,
+                &system.name,
                 20.0,
                 screen_height() - MARGIN,
                 TITLE_TEXT_SIZE,
@@ -159,11 +158,7 @@ impl MenuState {
     }
 }
 
-fn selected_game_input(
-    selected_game: &mut usize,
-    max_horizontal_games: &mut usize,
-    game_count: usize,
-) {
+fn selected_game_input(selected_game: &mut usize, row_width: usize, game_count: usize) {
     if is_key_pressed(KeyCode::Right) {
         *selected_game = selected_game.saturating_add(1);
     }
@@ -171,17 +166,10 @@ fn selected_game_input(
         *selected_game = selected_game.saturating_sub(1);
     }
     if is_key_pressed(KeyCode::Down) {
-        *selected_game = selected_game.saturating_add(*max_horizontal_games);
+        *selected_game = selected_game.saturating_add(row_width);
     }
     if is_key_pressed(KeyCode::Up) {
-        *selected_game = selected_game.saturating_sub(*max_horizontal_games);
-    }
-
-    if is_key_pressed(KeyCode::Minus) {
-        *max_horizontal_games = max_horizontal_games.saturating_sub(1);
-    }
-    if is_key_pressed(KeyCode::Equal) {
-        *max_horizontal_games = max_horizontal_games.saturating_add(1);
+        *selected_game = selected_game.saturating_sub(row_width);
     }
 
     *selected_game = (*selected_game).max(0).min(game_count.saturating_sub(1));

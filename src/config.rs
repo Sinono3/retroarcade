@@ -5,7 +5,17 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub struct Config {
-    pub max_horizontal_games: usize,
+    pub max_tile_size: usize,
+    pub system: Vec<PreconfSystem>,
+}
+
+/// Preconfigured/hardcoded systems
+/// This works for cores that are not detected by OpenVGDB.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
+pub struct PreconfSystem {
+    pub id: i64,
+    pub name: String,
+    pub extensions: Vec<String>,
 }
 
 impl Config {

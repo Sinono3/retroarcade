@@ -26,19 +26,17 @@ use crate::{
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
+    let config = Config::load("retroarcade.toml").unwrap();
     let mut cache = Cache::new("cache/hashes", "cache/image").unwrap();
-    let game_db = GameDb::load(&mut cache).await.unwrap();
+    let game_db = GameDb::load(&mut cache, &config).await.unwrap();
 
     macroquad::Window::new("RetroArcade", async {
-        let result = macroquad_main(cache, game_db).await;
+        let result = macroquad_main(config, game_db, cache).await;
         result.unwrap();
     });
 }
 
-async fn macroquad_main(cache: Cache, game_db: GameDb) -> anyhow::Result<()> {
-    let config = Config::load("retroarcade.toml")?;
-    let max_horizontal_games = config.max_horizontal_games;
-
+async fn macroquad_main(config: Config, game_db: GameDb, cache: Cache) -> anyhow::Result<()> {
     let glowing_material = load_material(
         include_str!("shaders/glowing_vert.glsl"),
         include_str!("shaders/glowing_frag.glsl"),
@@ -56,6 +54,7 @@ async fn macroquad_main(cache: Cache, game_db: GameDb) -> anyhow::Result<()> {
     glowing_material.set_uniform("glowIntensity", 1.0f32);
     glowing_material.set_uniform("zoomFactor", 0.2f32);
 
+    let max_tile_size = config.max_tile_size;
     let mut app = App {
         state: AppState::Menu,
         menu: MenuState {
@@ -65,7 +64,7 @@ async fn macroquad_main(cache: Cache, game_db: GameDb) -> anyhow::Result<()> {
             textures: HashMap::new(),
 
             selected_game: 0,
-            max_horizontal_games,
+            max_tile_size,
 
             glowing_material,
             glowing_material_time: 0.0,

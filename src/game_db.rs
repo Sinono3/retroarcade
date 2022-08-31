@@ -6,7 +6,7 @@ use macroquad::{prelude::Color, rand};
 use retro_rs::Emulator;
 use sqlx::SqliteConnection;
 
-use crate::{cache::Cache, hash::*};
+use crate::{cache::Cache, config::Config, hash::*};
 
 const CORE_DIR: &str = "cores/";
 const ROMS_DIR: &str = "roms/";
@@ -74,7 +74,7 @@ struct OpenVgdbSystem {
 }
 
 impl GameDb {
-    pub async fn load(cache: &mut Cache) -> Result<Self> {
+    pub async fn load(cache: &mut Cache, config: &Config) -> Result<Self> {
         let mut games = HashMap::new();
         let mut systems = HashMap::new();
         let mut untagged_games = Vec::new();
@@ -89,7 +89,7 @@ impl GameDb {
             .filter(|core| core.file_type().map_or(false, |t| t.is_file()))
             .map(|core| core.path());
 
-        'cores: for core_path in cores_dir {
+        for core_path in cores_dir {
             let extensions: Vec<String> = {
                 let extensions = Emulator::create_for_extensions(&core_path);
                 let string = extensions.to_str().unwrap().to_string();
@@ -101,24 +101,21 @@ impl GameDb {
             let short_name = loop {
                 if let Some(ext) = extensions_iter.next() {
                     match ext.as_str() {
-                        "sfc" => break "SNES",
-                        "nes" => break "NES",
-                        "z64" => break "N64",
-                        "cue" => break "PSX",
-                        "nds" => break "NDS",
+                        "sfc" => break Some("SNES"),
+                        "nes" => break Some("NES"),
+                        "z64" => break Some("N64"),
+                        "cue" => break Some("PSX"),
+                        "nds" => break Some("NDS"),
                         _ => continue,
                     }
                 } else {
                     log::error!("Couldn't find system for extensions: {:?}", extensions);
-                    continue 'cores;
+                    break None;
                 }
             };
 
             // Insert system if not yet in DB
-            if !systems
-                .iter()
-                .any(|(_, s): (_, &System)| s.name == short_name)
-            {
+            if let Some(short_name) = short_name {
                 let openvgdb_system = get_system_with_short_name(&mut conn, short_name).await?;
                 log::info!(
                     "Inserted system '{}' for extensions: {:?}",
@@ -132,6 +129,24 @@ impl GameDb {
                         id: openvgdb_system.system_id,
                         core_path: core_path.clone(),
                         name: openvgdb_system.system_short_name,
+                        extensions,
+                    },
+                );
+                continue;
+            }
+
+            // If not found, then look in preconfigured systems in config
+            if let Some(system) = config
+                .system
+                .iter()
+                .find(|s| extensions.iter().any(|ex| s.extensions.contains(ex)))
+            {
+                systems.insert(
+                    system.id,
+                    System {
+                        id: system.id,
+                        core_path: core_path.clone(),
+                        name: system.name.clone(),
                         extensions,
                     },
                 );
