@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use gilrs::{Button, Event, Gilrs};
 use macroquad::prelude::*;
 
 use crate::{cache::Cache, config::Config, game_db::GameDb, AppEvent};
@@ -18,21 +19,27 @@ pub struct MenuState {
 }
 
 impl MenuState {
-    pub fn update(&mut self) -> AppEvent {
-        let row_width = screen_width() as usize / self.max_tile_size;
+    pub fn update(&mut self, gilrs: &mut Gilrs) -> AppEvent {
         let previous_game = self.selected_game;
+        let game_count = self.game_db.games_iter().count();
+        let row_width = screen_width() as usize / self.max_tile_size;
 
-        selected_game_input(
-            &mut self.selected_game,
-            row_width,
-            self.game_db.games_iter().count(),
-        );
+        let input = get_input(gilrs);
+        self.selected_game = match input.direction {
+            InputDirection::Right => self.selected_game.saturating_add(1),
+            InputDirection::Left => self.selected_game.saturating_sub(1),
+            InputDirection::Down => self.selected_game.saturating_add(row_width),
+            InputDirection::Up => self.selected_game.saturating_sub(row_width),
+            InputDirection::None => self.selected_game,
+        };
+        self.selected_game = self.selected_game.max(0).min(game_count.saturating_sub(1));
 
+        // Glow effect reset
         if self.selected_game != previous_game {
             self.glowing_material_time = 0.0;
         }
 
-        if is_key_pressed(KeyCode::Enter) {
+        if input.enter {
             let (_id, game) = &self.game_db.games_iter().nth(self.selected_game).unwrap();
             let system = &self.game_db.get_system(game.system_id);
 
@@ -158,19 +165,49 @@ impl MenuState {
     }
 }
 
-fn selected_game_input(selected_game: &mut usize, row_width: usize, game_count: usize) {
-    if is_key_pressed(KeyCode::Right) {
-        *selected_game = selected_game.saturating_add(1);
-    }
-    if is_key_pressed(KeyCode::Left) {
-        *selected_game = selected_game.saturating_sub(1);
-    }
-    if is_key_pressed(KeyCode::Down) {
-        *selected_game = selected_game.saturating_add(row_width);
-    }
-    if is_key_pressed(KeyCode::Up) {
-        *selected_game = selected_game.saturating_sub(row_width);
+struct MenuInput {
+    direction: InputDirection,
+    enter: bool,
+}
+
+enum InputDirection {
+    Left,
+    Right,
+    Up,
+    Down,
+    None,
+}
+
+fn get_input(gilrs: &mut Gilrs) -> MenuInput {
+    // Keyboard input
+    let mut right = is_key_pressed(KeyCode::Right);
+    let mut left = is_key_pressed(KeyCode::Left);
+    let mut down = is_key_pressed(KeyCode::Down);
+    let mut up = is_key_pressed(KeyCode::Up);
+    let mut enter = is_key_pressed(KeyCode::Enter) || is_key_pressed(KeyCode::Space);
+
+    // Gamepad input
+    while let Some(Event { .. }) = gilrs.next_event() {}
+
+    for (_g_id, gamepad) in gilrs.gamepads() {
+        right = right || gamepad.is_pressed(Button::DPadRight);
+        left = left || gamepad.is_pressed(Button::DPadLeft);
+        down = down || gamepad.is_pressed(Button::DPadDown);
+        up = up || gamepad.is_pressed(Button::DPadUp);
+        enter = enter || gamepad.is_pressed(Button::Start) || gamepad.is_pressed(Button::South);
     }
 
-    *selected_game = (*selected_game).max(0).min(game_count.saturating_sub(1));
+    let direction = if right {
+        InputDirection::Right
+    } else if left {
+        InputDirection::Left
+    } else if down {
+        InputDirection::Down
+    } else if up {
+        InputDirection::Up
+    } else {
+        InputDirection::None
+    };
+
+    MenuInput { direction, enter }
 }

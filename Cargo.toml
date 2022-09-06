@@ -24,3 +24,4 @@ log = "0.4.17"
 pretty_env_logger = "0.4.0"
 image = { version = "0.24.3", features = ["png", "tga", "jpeg"] }
 toml = "0.5.9"
+gilrs = "0.9.0"

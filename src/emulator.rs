@@ -5,11 +5,16 @@ use std::{
 
 use anyhow::Result;
 use cpal::traits::DeviceTrait;
+use gilrs::{Event, Gilrs};
 use libretro_sys::PixelFormat;
 use macroquad::prelude::*;
-use retro_rs::{pixels, Buttons, Emulator, InputPort, RetroRsError};
+use retro_rs::{pixels, Emulator, InputPort, RetroRsError};
 
-use crate::{audio, AppEvent};
+use crate::{
+    audio,
+    gamepad::{update_input_port_with_gamepad, update_input_port_with_keyboard},
+    AppEvent,
+};
 
 pub struct EmulatorState {
     emu: Emulator,
@@ -147,54 +152,19 @@ impl EmulatorState {
         }
     }
 
-    pub fn update(&mut self) -> AppEvent {
-        let controller = &mut self.controllers[0];
-        controller.buttons = Buttons::new()
-            .up(is_key_down(KeyCode::Up))
-            .down(is_key_down(KeyCode::Down))
-            .left(is_key_down(KeyCode::Left))
-            .right(is_key_down(KeyCode::Right))
-            .a(is_key_down(KeyCode::D))
-            .b(is_key_down(KeyCode::S))
-            .x(is_key_down(KeyCode::W))
-            .y(is_key_down(KeyCode::A))
-            .l1(is_key_down(KeyCode::Q))
-            .r1(is_key_down(KeyCode::E))
-            .l2(is_key_down(KeyCode::Z))
-            .r2(is_key_down(KeyCode::C))
-            //.l3(is_key_down(KeyCode::H))
-            //.r3(is_key_down(KeyCode::L))
-            .start(is_key_down(KeyCode::Enter))
-            .select(is_key_down(KeyCode::P));
+    pub fn update(&mut self, gilrs: &mut Gilrs) -> AppEvent {
+        while let Some(Event { .. }) = gilrs.next_event() {}
 
-        {
-            let tex_width = self.fb_texture.width();
-            let tex_height = self.fb_texture.height();
-            let screen_width = screen_width();
-            let screen_height = screen_height();
+        let mut gamepads = gilrs.gamepads();
+        let mut keyboard_in_use = false;
 
-            let mouse_position = mouse_position();
-            controller.mouse_x = ((mouse_position.0 / screen_width) * tex_width) as i16;
-            controller.mouse_y = ((mouse_position.1 / screen_height) * tex_height) as i16;
-            controller.mouse_left_down = is_mouse_button_down(MouseButton::Left);
-            controller.mouse_right_down = is_mouse_button_down(MouseButton::Right);
-            controller.mouse_middle_down = is_mouse_button_down(MouseButton::Middle);
-
-            controller.joystick_x = if is_key_down(KeyCode::J) {
-                -50
-            } else if is_key_down(KeyCode::L) {
-                50
-            } else {
-                0
-            };
-
-            controller.joystick_y = if is_key_down(KeyCode::I) {
-                50
-            } else if is_key_down(KeyCode::K) {
-                -50
-            } else {
-                0
-            };
+        for input in self.controllers.iter_mut() {
+            if let Some((_, g)) = gamepads.next() {
+                update_input_port_with_gamepad(input, &g);
+            } else if !keyboard_in_use {
+                keyboard_in_use = true;
+                update_input_port_with_keyboard(input);
+            }
         }
 
         if is_key_down(KeyCode::Escape) {

@@ -4,6 +4,7 @@ mod config;
 mod dialog;
 mod emulator;
 mod game_db;
+mod gamepad;
 mod hash;
 mod menu;
 
@@ -12,6 +13,7 @@ use std::{
     path::PathBuf,
 };
 
+use gilrs::Gilrs;
 use macroquad::prelude::*;
 
 use crate::{
@@ -55,6 +57,7 @@ async fn macroquad_main(config: Config, game_db: GameDb, cache: Cache) -> anyhow
     glowing_material.set_uniform("zoomFactor", 0.2f32);
 
     let max_tile_size = config.max_tile_size;
+
     let mut app = App {
         state: AppState::Menu,
         menu: MenuState {
@@ -70,6 +73,7 @@ async fn macroquad_main(config: Config, game_db: GameDb, cache: Cache) -> anyhow
             glowing_material_time: 0.0,
         },
         emulator: None,
+        gilrs: Gilrs::new().unwrap(),
 
         dialog_queue: VecDeque::new(),
         current_dialog: None,
@@ -103,6 +107,7 @@ pub struct App {
     pub state: AppState,
     pub menu: MenuState,
     pub emulator: Option<EmulatorState>,
+    pub gilrs: Gilrs,
 
     pub dialog_queue: VecDeque<DynamicDialog>,
     pub current_dialog: Option<DynamicDialog>,
@@ -151,10 +156,10 @@ impl App {
         };
 
         match self.state {
-            AppState::Menu => self.menu.update(),
+            AppState::Menu => self.menu.update(&mut self.gilrs),
             AppState::Emulator => {
                 if let Some(emulator) = &mut self.emulator {
-                    emulator.update()
+                    emulator.update(&mut self.gilrs)
                 } else {
                     AppEvent::GoToMenu
                 }
