@@ -23,7 +23,7 @@ pub fn update_input_port_with_gamepad(input: &mut InputPort, g: &Gamepad) {
 
     let (x, y) = get_stick(g);
     input.joystick_x = (x * 32766.0) as i16;
-    input.joystick_y = (y * 32766.0) as i16;
+    input.joystick_y = (-y * 32766.0) as i16;
 }
 
 pub fn update_input_port_with_keyboard(input: &mut InputPort) {

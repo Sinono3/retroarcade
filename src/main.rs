@@ -71,6 +71,7 @@ async fn macroquad_main(config: Config, game_db: GameDb, cache: Cache) -> anyhow
 
             glowing_material,
             glowing_material_time: 0.0,
+            input: MenuInput::default(),
         },
         emulator: None,
         gilrs: Gilrs::new().unwrap(),

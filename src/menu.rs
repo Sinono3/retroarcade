@@ -10,6 +10,7 @@ pub struct MenuState {
     pub config: Config,
     pub cache: Cache,
     pub textures: HashMap<i64, Texture2D>,
+    pub input: MenuInput,
 
     pub selected_game: usize,
     pub max_tile_size: usize,
@@ -24,8 +25,8 @@ impl MenuState {
         let game_count = self.game_db.games_iter().count();
         let row_width = screen_width() as usize / self.max_tile_size;
 
-        let input = get_input(gilrs);
-        self.selected_game = match input.direction {
+        self.input = get_input(gilrs, &self.input);
+        self.selected_game = match self.input.direction {
             InputDirection::Right => self.selected_game.saturating_add(1),
             InputDirection::Left => self.selected_game.saturating_sub(1),
             InputDirection::Down => self.selected_game.saturating_add(row_width),
@@ -39,7 +40,7 @@ impl MenuState {
             self.glowing_material_time = 0.0;
         }
 
-        if input.enter {
+        if self.input.enter {
             let (_id, game) = &self.game_db.games_iter().nth(self.selected_game).unwrap();
             let system = &self.game_db.get_system(game.system_id);
 
@@ -165,20 +166,27 @@ impl MenuState {
     }
 }
 
-struct MenuInput {
+#[derive(Copy, Clone, PartialEq, Eq, Default, Debug)]
+pub struct MenuInput {
     direction: InputDirection,
     enter: bool,
+    up: bool,
+    down: bool,
+    left: bool,
+    right: bool,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Default, Debug)]
 enum InputDirection {
     Left,
     Right,
     Up,
     Down,
+    #[default]
     None,
 }
 
-fn get_input(gilrs: &mut Gilrs) -> MenuInput {
+fn get_input(gilrs: &mut Gilrs, input: &MenuInput) -> MenuInput {
     // Keyboard input
     let mut right = is_key_pressed(KeyCode::Right);
     let mut left = is_key_pressed(KeyCode::Left);
@@ -197,17 +205,24 @@ fn get_input(gilrs: &mut Gilrs) -> MenuInput {
         enter = enter || gamepad.is_pressed(Button::Start) || gamepad.is_pressed(Button::South);
     }
 
-    let direction = if right {
+    let direction = if !input.right && right {
         InputDirection::Right
-    } else if left {
+    } else if !input.left && left {
         InputDirection::Left
-    } else if down {
+    } else if !input.down && down {
         InputDirection::Down
-    } else if up {
+    } else if !input.up && up {
         InputDirection::Up
     } else {
         InputDirection::None
     };
 
-    MenuInput { direction, enter }
+    MenuInput {
+        direction,
+        enter,
+        up,
+        down,
+        left,
+        right,
+    }
 }
