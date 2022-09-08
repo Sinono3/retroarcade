@@ -58,7 +58,7 @@ async fn macroquad_main(config: Config, game_db: GameDb, cache: Cache) -> anyhow
     glowing_material.set_uniform("glowIntensity", 1.0f32);
     glowing_material.set_uniform("zoomFactor", 0.2f32);
 
-    let max_tile_size = config.max_tile_size;
+    let max_tile_size = config.menu.max_tile_size;
 
     let mut app = App {
         state: AppState::Menu,

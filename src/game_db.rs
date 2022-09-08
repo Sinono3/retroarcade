@@ -8,9 +8,6 @@ use sqlx::SqliteConnection;
 
 use crate::{cache::Cache, config::Config, hash::*};
 
-const CORE_DIR: &str = "cores/";
-const ROMS_DIR: &str = "roms/";
-
 pub struct Game {
     pub system_id: i64,
     pub sha1: String,
@@ -83,44 +80,48 @@ impl GameDb {
         let openvgdb = sqlx::SqlitePool::connect("openvgdb.sqlite").await?;
         let mut conn = openvgdb.acquire().await?;
 
-        let cores_dir = fs::read_dir(CORE_DIR)
+        let cores_dir = fs::read_dir(&config.core_path)
             .context("reading core dir")?
             .filter_map(|core| core.ok())
             .filter(|core| core.file_type().map_or(false, |t| t.is_file()))
             .map(|core| core.path());
 
-        for core_path in cores_dir {
-            let extensions: Vec<String> = {
-                let extensions = Emulator::create_for_extensions(&core_path);
-                let string = extensions.to_str().unwrap().to_string();
-                string.split('|').map(String::from).collect()
+        'cores: for core_path in cores_dir {
+            let (library_name, _extensions): (String, Vec<String>) = {
+                let system_info = Emulator::create_for_system_info(&core_path);
+                let string = system_info.extensions.to_str().unwrap().to_string();
+                (
+                    system_info.library_name.to_str().unwrap().to_string(),
+                    string.split('|').map(String::from).collect(),
+                )
             };
 
-            let mut extensions_iter = extensions.iter();
+            let mut system_iter = config.system.iter();
 
-            let short_name = loop {
-                if let Some(ext) = extensions_iter.next() {
-                    match ext.as_str() {
-                        "sfc" => break Some("SNES"),
-                        "nes" => break Some("NES"),
-                        "z64" => break Some("N64"),
-                        "cue" => break Some("PSX"),
-                        "nds" => break Some("NDS"),
-                        _ => continue,
+            let preconf_system = loop {
+                if let Some(sys) = system_iter.next() {
+                    if sys.lib == library_name {
+                        break sys;
+                    } else {
+                        continue;
                     }
                 } else {
-                    log::error!("Couldn't find system for extensions: {:?}", extensions);
-                    break None;
+                    log::error!(
+                        "Couldn't find system for core library name: {:?}",
+                        &library_name
+                    );
+                    continue 'cores;
                 }
             };
 
             // Insert system if not yet in DB
-            if let Some(short_name) = short_name {
-                let openvgdb_system = get_system_with_short_name(&mut conn, short_name).await?;
+            if let Ok(openvgdb_system) =
+                get_system_with_short_name(&mut conn, &preconf_system.name).await
+            {
                 log::info!(
                     "Inserted system '{}' for extensions: {:?}",
                     openvgdb_system.system_short_name,
-                    extensions
+                    preconf_system.ext
                 );
 
                 systems.insert(
@@ -129,25 +130,19 @@ impl GameDb {
                         id: openvgdb_system.system_id,
                         core_path: core_path.clone(),
                         name: openvgdb_system.system_short_name,
-                        extensions,
+                        extensions: preconf_system.ext.clone(),
                     },
                 );
-                continue;
             }
-
             // If not found, then look in preconfigured systems in config
-            if let Some(system) = config
-                .system
-                .iter()
-                .find(|s| extensions.iter().any(|ex| s.extensions.contains(ex)))
-            {
+            else if let Some(system) = config.system.iter().find(|s| s.lib == library_name) {
                 systems.insert(
                     system.id,
                     System {
                         id: system.id,
                         core_path: core_path.clone(),
                         name: system.name.clone(),
-                        extensions,
+                        extensions: preconf_system.ext.clone(),
                     },
                 );
             }
@@ -166,7 +161,7 @@ impl GameDb {
             })
         };
 
-        for (rom_path, name) in walkdir::WalkDir::new(ROMS_DIR)
+        for (rom_path, name) in walkdir::WalkDir::new(&config.rom_path)
             .into_iter()
             .filter_map(|rom| rom.ok())
             .filter(|rom| rom.file_type().is_file())
@@ -189,7 +184,7 @@ impl GameDb {
             };
 
             if let Ok(openvgdb_rom) = get_rom_with_sha1(&mut conn, &sha1).await {
-                log::info!("ROM Found '{}': {}", name.to_str().unwrap(), sha1);
+                log::info!("ROM Found '{}'", name.to_str().unwrap());
                 let openvgdb_release = if let Ok(release) =
                     get_release_with_rom_id(&mut conn, openvgdb_rom.rom_id).await
                 {
@@ -203,6 +198,10 @@ impl GameDb {
                     title: openvgdb_release.release_title_name,
                     cover_url: openvgdb_release.release_cover_front,
                 });
+
+                if !systems.contains_key(&openvgdb_rom.system_id) {
+                    continue;
+                }
 
                 games.insert(
                     openvgdb_rom.rom_id,
@@ -224,9 +223,8 @@ impl GameDb {
             } else if let Some(system_id) = find_system_id_for_extension(&extension) {
                 // Separate games into games with metadata and untagged games
                 log::warn!(
-                    "ROM Failed (extension fallback) '{}': {}",
+                    "ROM Failed (extension fallback) '{}'",
                     name.to_str().unwrap(),
-                    sha1
                 );
 
                 untagged_games.push(Game {
@@ -244,7 +242,7 @@ impl GameDb {
                     ),
                 });
             } else {
-                log::error!("ROM Failed '{}': {}", name.to_str().unwrap(), sha1);
+                log::error!("ROM Failed '{}'", name.to_str().unwrap());
             };
         }
 

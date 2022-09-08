@@ -1,6 +1,18 @@
-max_tile_size = 200
+rom_path = "roms/"
+core_path = "cores/"
+cache_path = "cache/"
 
-[[system]]
-id = -1
-name = "DOOM"
-extensions = ["wad"]
+system = [
+	{ name = "NES", lib = "FCEUmm", ext = ["nes"] },
+	{ name = "SNES", lib = "Snes9x 2010", ext = ["sfc"] },
+	{ name = "PSX", lib = "Beetle PSX", ext = ["cue"] },
+	{ name = "MD", lib = "Genesis Plus GX", ext = ["md"] },
+	{ name = "DOOM", lib = "PrBoom", ext = ["wad"] },
+	#{ name = "N64", lib = "ParaLLEl N64", ext = ["z64"]  },
+	#{ name = "PS2", lib = "pcsx2 (alpha)", ext = ["iso"]  },
+	#{ name = "NDS", lib = "melonDS", ext = ["nds"]  },
+	#{ name = "3DS", lib = "Citra", ext = ["3ds"]  },
+]
+
+[menu]
+max_tile_size = 200
