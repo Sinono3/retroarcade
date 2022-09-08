@@ -13,6 +13,7 @@ use std::{
     path::PathBuf,
 };
 
+use dotenv::dotenv;
 use gilrs::Gilrs;
 use macroquad::prelude::*;
 
@@ -27,6 +28,7 @@ use crate::{
 
 #[tokio::main]
 async fn main() {
+    dotenv().ok();
     pretty_env_logger::init();
     let config = Config::load("retroarcade.toml").unwrap();
     let mut cache = Cache::new("cache/hashes", "cache/image").unwrap();
