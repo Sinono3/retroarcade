@@ -1,11 +1,12 @@
 use std::{
+    collections::HashSet,
     path::Path,
     sync::{Arc, Mutex},
 };
 
 use anyhow::Result;
 use cpal::traits::DeviceTrait;
-use gilrs::{Event, Gilrs};
+use gilrs::{Event, GamepadId, Gilrs};
 use libretro_sys::PixelFormat;
 use macroquad::prelude::*;
 use retro_rs::{pixels, Emulator, InputPort, RetroRsError};
@@ -19,6 +20,7 @@ use crate::{
 pub struct EmulatorState {
     emu: Emulator,
     controllers: [InputPort; 2],
+    gamepad_ids: HashSet<GamepadId>,
 
     // Graphics
     fb_copy: Vec<u8>,
@@ -139,9 +141,12 @@ impl EmulatorState {
         })
         .unwrap();
 
+        let gamepad_ids = HashSet::new();
+
         EmulatorState {
             emu,
             controllers,
+            gamepad_ids,
             fb_copy,
             fb_image,
             fb_texture,
@@ -155,12 +160,11 @@ impl EmulatorState {
     pub fn update(&mut self, gilrs: &mut Gilrs) -> AppEvent {
         while let Some(Event { .. }) = gilrs.next_event() {}
 
-        let mut gamepads = gilrs.gamepads();
         let mut keyboard_in_use = false;
 
-        for input in self.controllers.iter_mut() {
-            if let Some((_, g)) = gamepads.next() {
-                update_input_port_with_gamepad(input, &g);
+        for (input, g_id) in self.controllers.iter_mut().zip(self.gamepad_ids.iter()) {
+            if let Some(gamepad) = gilrs.connected_gamepad(*g_id) {
+                update_input_port_with_gamepad(input, &gamepad);
             } else if !keyboard_in_use {
                 keyboard_in_use = true;
                 update_input_port_with_keyboard(input);
@@ -174,6 +178,11 @@ impl EmulatorState {
         self.emu.run(self.controllers);
         self.update_framebuffer();
         self.update_audio_buffer().unwrap();
+
+        // Gamepads
+        for (g_id, _) in gilrs.gamepads() {
+            self.gamepad_ids.insert(g_id);
+        }
 
         AppEvent::Continue
     }
@@ -260,7 +269,7 @@ impl EmulatorState {
         self.fb_interlace_factor = (pitch - width) / 4;
     }
 
-    pub fn render(&self) {
+    pub fn render(&self, gilrs: &Gilrs) {
         clear_background(BLACK);
 
         let tex_width = self.fb_texture.width();
@@ -288,6 +297,46 @@ impl EmulatorState {
                 pivot: None,
             },
         );
+
+        let error_width = 100.0;
+        let error_height = 50.0;
+
+        // Gamepad disconnected warnings
+        for (i, g_id) in self.gamepad_ids.iter().enumerate() {
+            let gamepad = gilrs.gamepad(*g_id);
+
+            let x = 20.0 + (error_width + 10.0) * i as f32;
+            let y = screen_height - error_height;
+
+            if !gamepad.is_connected() {
+                println!("Gamepad {} ({}): Disconnected", g_id, gamepad.name());
+                draw_rectangle(
+                    x,
+                    y,
+                    error_width,
+                    error_height,
+                    Color::from_rgba(40, 0, 0, 240),
+                );
+                draw_text_ex(
+                    gamepad.name(),
+                    x,
+                    y + error_height,
+                    TextParams {
+                        color: Color::from_rgba(255, 0, 0, 255),
+                        ..Default::default()
+                    },
+                );
+                draw_text_ex(
+                    "Desconect.",
+                    x,
+                    y + error_height - 16.0,
+                    TextParams {
+                        color: Color::from_rgba(255, 0, 0, 255),
+                        ..Default::default()
+                    },
+                );
+            }
+        }
     }
 
     pub fn snapshot(&self) -> Vec<u8> {

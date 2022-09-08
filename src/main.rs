@@ -72,7 +72,7 @@ async fn macroquad_main(config: Config, game_db: GameDb, cache: Cache) -> anyhow
             max_tile_size,
 
             glowing_material,
-            glowing_material_time: 0.0,
+            time: 0.0,
             input: MenuInput::default(),
         },
         emulator: None,
@@ -175,7 +175,7 @@ impl App {
             AppState::Menu => self.menu.render(),
             AppState::Emulator => {
                 if let Some(emulator) = self.emulator.as_ref() {
-                    emulator.render();
+                    emulator.render(&self.gilrs);
                 }
             }
         }

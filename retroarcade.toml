@@ -2,6 +2,7 @@ rom_path = "roms/"
 core_path = "cores/"
 cache_path = "cache/"
 
+# The systems to be configured
 system = [
 	{ name = "NES", lib = "FCEUmm", ext = ["nes"] },
 	{ name = "SNES", lib = "Snes9x 2010", ext = ["sfc"] },

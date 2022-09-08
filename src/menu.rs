@@ -16,7 +16,7 @@ pub struct MenuState {
     pub max_tile_size: usize,
 
     pub glowing_material: Material,
-    pub glowing_material_time: f32,
+    pub time: f32,
 }
 
 impl MenuState {
@@ -37,7 +37,7 @@ impl MenuState {
 
         // Glow effect reset
         if self.selected_game != previous_game {
-            self.glowing_material_time = 0.0;
+            self.time = 0.0;
         }
 
         if self.input.enter {
@@ -78,9 +78,8 @@ impl MenuState {
             let y = (gfx_counter / row_width) as f32 * game_size + TITLE_TEXT_SIZE + MARGIN;
 
             if counter == self.selected_game {
-                self.glowing_material_time += get_frame_time();
-                self.glowing_material
-                    .set_uniform("time", self.glowing_material_time);
+                self.time += get_frame_time();
+                self.glowing_material.set_uniform("time", self.time);
                 gl_use_material(self.glowing_material);
             }
 
