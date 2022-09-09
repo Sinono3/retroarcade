@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::Result;
 use cpal::traits::DeviceTrait;
-use gilrs::{Event, GamepadId, Gilrs};
+use gilrs::{Button, Event, GamepadId, Gilrs};
 use libretro_sys::PixelFormat;
 use macroquad::prelude::*;
 use retro_rs::{pixels, Emulator, InputPort, RetroRsError};
@@ -171,7 +171,8 @@ impl EmulatorState {
             }
         }
 
-        if is_key_down(KeyCode::Escape) {
+        // Check button combination to go back to menu
+        if should_quit_game(gilrs) {
             return AppEvent::GoToMenu;
         }
 
@@ -344,4 +345,16 @@ impl EmulatorState {
         self.emu.save(&mut save_buffer);
         save_buffer
     }
+}
+
+fn should_quit_game(gilrs: &Gilrs) -> bool {
+    // Check for exit game keyboard and gamepad combinations
+    // Start + Select + West = Quit game
+    is_key_down(KeyCode::Escape)
+        || gilrs.gamepads().fold(false, |should_quit, (_, g)| {
+            should_quit
+                || (g.is_pressed(Button::Select)
+                    && g.is_pressed(Button::Start)
+                    && g.is_pressed(Button::West))
+        })
 }
