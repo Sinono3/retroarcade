@@ -17,3 +17,5 @@ system = [
 
 [menu]
 max_tile_size = 200
+poweroff_cmd = "sudo systemctl poweroff"
+reboot_cmd = "sudo systemctl reboot"

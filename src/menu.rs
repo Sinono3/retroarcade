@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, io::Write, process::Command};
 
 use gilrs::{Button, Event, Gilrs};
 use macroquad::prelude::*;
@@ -39,6 +39,10 @@ impl MenuState {
         if self.selected_game != previous_game {
             self.time = 0.0;
         }
+
+        // Check for poweroff/reboot commands
+        #[cfg(target_os = "linux")]
+        poweroff_reboot_check(gilrs, &self.config);
 
         if self.input.enter {
             let (_id, game) = &self.game_db.games_iter().nth(self.selected_game).unwrap();
@@ -201,7 +205,7 @@ fn get_input(gilrs: &mut Gilrs, input: &MenuInput) -> MenuInput {
         left = left || gamepad.is_pressed(Button::DPadLeft);
         down = down || gamepad.is_pressed(Button::DPadDown);
         up = up || gamepad.is_pressed(Button::DPadUp);
-        enter = enter || gamepad.is_pressed(Button::Start) || gamepad.is_pressed(Button::South);
+        enter = enter || gamepad.is_pressed(Button::South) || gamepad.is_pressed(Button::East);
     }
 
     let direction = if !input.right && right {
@@ -223,5 +227,52 @@ fn get_input(gilrs: &mut Gilrs, input: &MenuInput) -> MenuInput {
         down,
         left,
         right,
+    }
+}
+
+fn poweroff_reboot_check(gilrs: &Gilrs, config: &Config) {
+    // Check for poweroff/reboot gamepad combinations
+    let (mut poweroff, mut reboot) =
+        gilrs
+            .gamepads()
+            .fold((false, false), |(poweroff, reboot), (_, g)| {
+                let base = g.is_pressed(Button::Select) && g.is_pressed(Button::Start);
+                // Start+Select+L1 = Power off
+                let poweroff = poweroff || (base && g.is_pressed(Button::LeftTrigger));
+                // Start+Select+R1 = Reboot
+                let reboot = reboot || (base && g.is_pressed(Button::RightTrigger));
+                (poweroff, reboot)
+            });
+
+    // Also check for poweroff/reboot key combinations
+    // Ctrl+Alt+End = Power off
+    poweroff = poweroff
+        || (is_key_down(KeyCode::LeftControl)
+            && is_key_down(KeyCode::LeftAlt)
+            && is_key_down(KeyCode::End));
+
+    // Ctrl+Alt+Del = Reboot
+    reboot = reboot
+        || (is_key_down(KeyCode::LeftControl)
+            && is_key_down(KeyCode::LeftAlt)
+            && is_key_down(KeyCode::Delete));
+
+    let exec = |cmd| {
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(cmd)
+            .output()
+            .expect("failed to execute reboot process");
+        std::io::stdout().write_all(&output.stdout).unwrap();
+        std::io::stderr().write_all(&output.stderr).unwrap();
+    };
+
+    if poweroff {
+        println!("Poweroff requested");
+        exec(&config.menu.poweroff_cmd);
+    }
+    if reboot {
+        println!("Reboot requested");
+        exec(&config.menu.reboot_cmd);
     }
 }

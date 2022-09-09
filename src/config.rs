@@ -18,6 +18,8 @@ pub struct Config {
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub struct MenuConfig {
     pub max_tile_size: usize,
+    pub poweroff_cmd: String,
+    pub reboot_cmd: String,
 }
 
 /// Preconfigured/hardcoded systems
