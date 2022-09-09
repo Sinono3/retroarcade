@@ -41,7 +41,6 @@ impl Config {
 
         for (i, sys) in config.system.iter_mut().enumerate() {
             sys.id = -(i as i64);
-            println!("{}", sys.id);
         }
 
         Ok(config)
