@@ -82,6 +82,10 @@ async fn macroquad_main(config: Config, game_db: GameDb, cache: Cache) -> anyhow
         current_dialog: None,
     };
 
+    // Draw loading screen
+    draw_loading_screen();
+    next_frame().await;
+
     loop {
         let event = app.update();
 
@@ -187,4 +191,14 @@ impl App {
             }
         }
     }
+}
+
+fn draw_loading_screen() {
+    draw_text(
+        "Loading...",
+        10.0,
+        screen_height() - 10.0,
+        48.0,
+        Color::from_rgba(255, 255, 255, 255),
+    );
 }
