@@ -54,7 +54,7 @@ You can modify the configuration in retroarcade.toml to your liking. Only ROMs i
 
 ### Adding systems/cores
 
-You must download their respective cores from the [libretro buildbot](http://buildbot.libretro.com/nightly/linux/x86_64/latest/), extract them and place them on the cores directory. You can also build the cores yourself.
+You must download their respective cores from the [libretro buildbot](http://buildbot.libretro.com/nightly/linux/x86_64/latest/), extract them and place them on the cores directory. You can also build the cores yourself. You also have to add the system entry on `retroarcade.toml` with the corresponding library name. To get that library name, just run the program and [it will print an error about not finding the core](https://github.com/Sinono3/retroarcade/blob/52ea5c4b4b5daadb62ae27452530f116402dd468/src/game_db.rs#L109-L112).
 
 ### Adding games/ROMs
 
