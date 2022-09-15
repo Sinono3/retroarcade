@@ -1998,7 +1998,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "retroarcade-frontend"
+name = "retroarcade"
 version = "0.1.0"
 dependencies = [
  "anyhow",
