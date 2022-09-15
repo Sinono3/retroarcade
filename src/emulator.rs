@@ -161,9 +161,12 @@ impl EmulatorState {
         while let Some(Event { .. }) = gilrs.next_event() {}
 
         let mut keyboard_in_use = false;
+        let mut registered_gamepad_iter = self.gamepad_ids.iter();
 
-        for (input, g_id) in self.controllers.iter_mut().zip(self.gamepad_ids.iter()) {
-            if let Some(gamepad) = gilrs.connected_gamepad(*g_id) {
+        for input in self.controllers.iter_mut() {
+            let g_id = registered_gamepad_iter.next();
+
+            if let Some(gamepad) = g_id.and_then(|g_id| gilrs.connected_gamepad(*g_id)) {
                 update_input_port_with_gamepad(input, &gamepad);
             } else if !keyboard_in_use {
                 keyboard_in_use = true;
