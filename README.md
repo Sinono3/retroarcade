@@ -63,3 +63,7 @@ Simply place the ROMs in the directory specified in the configuration. You can a
 ## Origin
 
 This was made for a demonstration project presented during the *Expo Técnica* of the *Colegio Técnico Nacional de Asunción* on the 9th of September, 2022.
+
+## Thanks
+
+To Joe Osborn for [retro-rs](https://github.com/JoeOsborn/retro-rs), which was the building block for the entire project. [A fork of the crate](https://github.com/Sinono3/retro-rs/tree/new-features) is used for the frontend.
